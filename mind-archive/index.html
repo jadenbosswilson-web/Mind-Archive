@@ -1,0 +1,2794 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mind Archive</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --surface-2:#f2f0e9; --border:#e5e2d8;
+    --text:#26251f; --text-2:#6b6a60; --text-muted:#9c9a8e;
+    --accent:#7f6a4d; --accent-ink:#ffffff; --accent-soft:#efe8db;
+    --danger:#b3452f; --danger-soft:#f6e4de;
+    --radius:10px; --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --font-serif: Georgia, "Times New Roman", serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#17181a; --surface:#1e1f22; --surface-2:#26272b; --border:#34353a;
+    --text:#ece9e1; --text-2:#a6a49a; --text-muted:#75746b;
+    --accent:#cba36c; --accent-ink:#1c1a15; --accent-soft:#332c1f;
+    --danger:#e58573; --danger-soft:#3a2420;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
+  button,input,select,textarea{font-family:inherit;font-size:13px;color:var(--text);}
+  button{cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;}
+  button:hover{border-color:var(--text-muted);}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  button.primary:hover{opacity:.9;}
+  button.ghost{background:transparent;border-color:transparent;}
+  button.ghost:hover{background:var(--surface-2);border-color:transparent;}
+  button.danger{color:var(--danger);border-color:var(--danger);background:var(--danger-soft);}
+  button.icon{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;}
+  input[type=text],input[type=email],input[type=password],input[type=search],input[type=number],select,textarea{
+    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);
+  }
+  input:focus,select:focus,textarea:focus,button:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .hidden{display:none !important;}
+  a{color:var(--accent);}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border);border-radius:999px;font-size:12px;background:var(--surface);color:var(--text-2);cursor:pointer;}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
+  .chip-add{border-style:dashed;color:var(--text-2);}
+  .chip-del,.chip-more{border:none;background:transparent;border-radius:4px;padding:0 2px;font-size:12px;line-height:1;color:inherit;}
+  .chip-del{opacity:0;font-weight:700;transition:opacity .12s;}
+  .chip:hover .chip-del, .chip:focus-within .chip-del{opacity:.55;}
+  .chip-del:hover{opacity:1 !important;color:var(--danger);}
+  .chip-more{display:none;opacity:.55;font-weight:700;}
+  .chip-edit{border:none;background:transparent;border-radius:4px;padding:0 2px;font-size:11px;line-height:1;color:inherit;opacity:0;transition:opacity .12s;}
+  .chip:hover .chip-edit, .chip:focus-within .chip-edit{opacity:.55;}
+  .chip-edit:hover{opacity:1 !important;color:var(--accent);}
+  @media (hover:none){
+    .chip-del{display:none;}
+    .chip-del.revealed{display:inline-flex;opacity:1;}
+    .chip-edit{display:none;}
+    .chip-edit.revealed{display:inline-flex;opacity:1;}
+    .chip-more{display:inline-flex;}
+  }
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:var(--surface-2);color:var(--text-2);}
+
+  /* ---------- AUTH ---------- */
+  #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;}
+  .brand{display:flex;align-items:center;gap:8px;margin-bottom:24px;}
+  .brand-mark{width:32px;height:32px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;}
+  .brand-name{font-size:17px;font-weight:600;}
+  .auth-tagline{font-size:13px;color:var(--text-2);line-height:1.6;margin:-14px 0 22px;}
+  .auth-tabs{display:flex;border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:20px;}
+  .auth-tab{flex:1;text-align:center;padding:7px;border-radius:8px;cursor:pointer;color:var(--text-2);font-weight:500;}
+  .auth-tab.active{background:var(--accent);color:var(--accent-ink);}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px;}
+  .auth-foot{margin-top:16px;font-size:12px;color:var(--text-muted);text-align:center;}
+
+  /* ---------- SHELL ---------- */
+  #app-shell{display:flex;height:100vh;position:relative;}
+  .sidebar{width:250px;min-width:180px;max-width:440px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;position:relative;transition:width .15s ease;}
+  .sidebar.no-anim{transition:none !important;}
+  .sidebar-resize-handle{position:absolute;top:0;right:-4px;width:7px;height:100%;cursor:col-resize;z-index:6;}
+  .sidebar-resize-handle:hover, .sidebar-resize-handle.dragging{background:var(--accent);opacity:.25;}
+  .sidebar.collapsed{width:0 !important;min-width:0;padding-left:0;padding-right:0;overflow:hidden;border-right:none;}
+  .sidebar-top{display:flex;align-items:center;justify-content:space-between;padding:0 4px 16px;}
+  /* Collapse toggle lives outside .sidebar (as a sibling) so .sidebar's own overflow:hidden
+     when collapsed never clips it — that was the bug preventing the sidebar from reopening. */
+  .sidebar-collapse-btn{position:absolute;top:16px;left:237px;width:26px;height:26px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;z-index:45;color:var(--text-2);transition:left .15s ease;}
+  .sidebar-collapse-btn.no-anim{transition:none !important;}
+  .sidebar-collapse-btn:hover{color:var(--accent);border-color:var(--accent);}
+  .mobile-topbar{display:none;}
+  .nav-group{margin-bottom:18px;}
+  .nav-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);padding:0 8px;margin-bottom:6px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text-2);cursor:pointer;font-size:13px;}
+  .nav-item:hover{background:var(--surface-2);}
+  .nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .nav-item .ico{width:16px;text-align:center;flex-shrink:0;}
+  .folder-row{display:flex;align-items:center;justify-content:space-between;}
+  .folder-row-right{display:flex;align-items:center;gap:2px;}
+  .folder-row .cnt{font-size:11px;color:var(--text-muted);}
+  .folder-del{width:18px;height:18px;padding:0;border:none;background:transparent;font-size:14px;line-height:1;opacity:0;border-radius:4px;transition:opacity .12s;}
+  .folder-row:hover .folder-del, .folder-row:focus-within .folder-del{opacity:.45;}
+  .folder-del:hover{opacity:1 !important;color:var(--danger);background:var(--danger-soft);}
+  .folder-more{display:none;width:18px;height:18px;padding:0;border:none;background:transparent;font-size:14px;line-height:1;opacity:.5;border-radius:4px;}
+  @media (hover:none){
+    .folder-del{display:none;}
+    .folder-del.revealed{display:inline-flex;align-items:center;justify-content:center;opacity:1;}
+    .folder-more{display:inline-flex;align-items:center;justify-content:center;}
+  }
+  .sidebar-bottom{margin-top:auto;border-top:1px solid var(--border);padding-top:12px;position:relative;}
+  .user-chip{display:flex;align-items:center;gap:8px;padding:6px;border-radius:8px;cursor:pointer;}
+  .user-chip:hover{background:var(--surface-2);}
+  .user-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;}
+  .user-menu{position:absolute;bottom:52px;left:6px;right:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.12);overflow:hidden;}
+  .user-menu button{width:100%;text-align:left;border:none;border-radius:0;padding:9px 12px;}
+
+  .main{flex:1;overflow-y:auto;padding:24px 32px;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .view-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:16px;flex-wrap:wrap;}
+  .view-title{font-size:20px;font-weight:600;}
+  .view-sub{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .search-box{position:relative;width:220px;}
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center;}
+
+  .notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+  .note-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:border-color .1s;}
+  .note-card:hover{border-color:var(--accent);}
+  .note-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+  .note-card h3{margin:0;font-size:14px;font-weight:600;}
+  .note-snippet{font-size:12px;color:var(--text-2);flex:1;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}
+  .note-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);}
+  .note-icons{display:flex;gap:6px;color:var(--text-muted);}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted);}
+
+  /* ---------- EDITOR ---------- */
+  .editor-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+  .editor-title-input{font-size:22px;font-weight:600;border:none;background:transparent;padding:4px 0;width:auto;flex:1;min-width:200px;}
+  .editor-title-input:focus{outline:none;border-bottom:2px solid var(--accent);}
+  .editor-actions{display:flex;gap:6px;margin-left:auto;}
+  .editor-sub{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-muted);margin-bottom:14px;flex-wrap:wrap;}
+  .toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;margin-bottom:12px;}
+  .toolbar select{width:auto;padding:5px 6px;}
+  .toolbar .sep{width:1px;height:20px;background:var(--border);margin:0 2px;}
+  .swatch{width:20px;height:20px;border-radius:5px;border:1px solid var(--border);cursor:pointer;padding:0;}
+  #font-size-input{width:54px;text-align:center;padding:5px 4px;}
+  #note-content{min-height:280px;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface);}
+  #note-content img{max-width:100%;border-radius:8px;margin:8px 0;display:block;}
+  #note-content:focus{outline:none;border-color:var(--accent);}
+  .tag-row{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap;}
+  .tag-field{min-width:150px;}
+  .tag-field label{display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;}
+  .voice-strip{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-top:12px;}
+  .waveform{flex:1;height:20px;display:flex;align-items:center;gap:2px;}
+  .waveform span{width:3px;background:var(--accent);border-radius:2px;}
+  .ai-hint{margin-top:14px;padding:10px 12px;border:1px dashed var(--accent);border-radius:10px;background:var(--accent-soft);font-size:12px;color:var(--text);}
+  .editor-foot{display:flex;justify-content:space-between;margin-top:20px;padding-top:14px;border-top:1px solid var(--border);}
+  .save-flag{font-size:11px;color:var(--text-muted);}
+
+  /* ---------- TIMELINE ---------- */
+  .timeline{position:relative;padding-left:26px;margin-top:20px;}
+  .timeline::before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--border);}
+  .tl-month{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin:22px 0 10px;}
+  .tl-month:first-child{margin-top:0;}
+  .tl-item{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer;}
+  .tl-item:hover{border-color:var(--accent);}
+  .tl-item::before{content:"";position:absolute;left:-23px;top:16px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);}
+  .tl-item-top{display:flex;justify-content:space-between;gap:10px;}
+  .tl-item h4{margin:0;font-size:13px;font-weight:600;}
+  .tl-date{font-size:11px;color:var(--text-muted);white-space:nowrap;}
+  .tl-snip{font-size:12px;color:var(--text-2);margin-top:4px;}
+  .tl-tags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+
+  /* ---------- MIND MAP ---------- */
+  .mindmap-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;overflow:hidden;}
+  .mm-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--text-2);align-items:center;}
+  .mm-legend span{display:inline-flex;align-items:center;gap:6px;}
+  .mm-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  #mindmap-svg{display:block;cursor:grab;touch-action:none;}
+  #mindmap-svg.mm-panning{cursor:grabbing;}
+  .mm-node,.mm-topic{cursor:pointer;}
+  .mm-node circle,.mm-topic circle{transition:fill-opacity .12s, stroke-width .12s;}
+  .mm-node:hover circle{fill-opacity:1 !important;}
+  .mm-topic:hover circle{stroke-width:3;}
+  .mm-node:focus,.mm-topic:focus{outline:2px solid var(--accent);outline-offset:2px;}
+  .mm-note-group{transform-box:fill-box;transform-origin:center;transition:opacity .18s ease, transform .18s ease;}
+  .mm-note-group.mm-pop-init{opacity:0;transform:scale(.35);}
+  .mm-line{transition:opacity .18s ease;}
+  .mm-line.mm-pop-init{opacity:0;}
+  /* Theme-aware SVG text: fill via CSS var (not a literal hex) so labels stay readable in dark mode. */
+  .mm-center{fill:var(--accent);}
+  .mm-label{fill:var(--text-2);}
+  .mm-label-muted{fill:var(--text-muted);}
+  .mm-on-color{fill:#fff;}
+
+  /* Topic manager: add/rename/delete topics right from the mind map, reusing the
+     same chip + hover/tap-reveal pattern already used for folders and filters. */
+  .mm-topics-manager{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+
+  /* List mode: clicking a topic shows a plain HTML list of its notes instead of
+     bursting nodes out on the SVG canvas — no overlap or clipping is possible. */
+  .mm-list-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;}
+  .mm-list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .mm-list-head h4{margin:0;font-size:14px;}
+  .mm-list-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;border-top:1px solid var(--border);}
+  .mm-list-row:first-of-type{border-top:none;}
+  .mm-list-row:hover{background:var(--surface-2);}
+  .mm-list-row-main{flex:1;min-width:0;cursor:pointer;}
+  .mm-list-row-main h5{margin:0 0 2px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mm-list-row-main .sub{font-size:11px;color:var(--text-muted);}
+  .mm-list-row select{width:auto;min-width:110px;padding:5px 6px;font-size:12px;}
+
+  /* ---------- AI CHAT ---------- */
+  .ai-off{text-align:center;color:var(--text-muted);font-size:12px;padding:40px 10px;}
+  #ai-chat-log{display:flex;flex-direction:column;gap:10px;max-width:640px;min-height:280px;max-height:52vh;overflow-y:auto;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;}
+  .chat-bubble{max-width:80%;}
+  .chat-bubble.user{align-self:flex-end;}
+  .chat-bubble.ai{align-self:flex-start;}
+  .chat-role{font-size:10px;color:var(--text-muted);margin-bottom:2px;}
+  .chat-text{padding:8px 12px;border-radius:10px;font-size:13px;}
+
+  /* ---------- SETTINGS ---------- */
+  .settings-grid{display:grid;gap:16px;max-width:640px;}
+  .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+  .settings-card h3{margin:0 0 4px;font-size:14px;}
+  .settings-card .desc{font-size:12px;color:var(--text-muted);margin-bottom:14px;}
+  .setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);}
+  .setting-row:first-of-type{border-top:none;padding-top:0;}
+  .setting-row .label{font-size:13px;}
+  .setting-row .sub{font-size:11px;color:var(--text-muted);}
+  .switch{position:relative;width:38px;height:22px;border-radius:999px;background:var(--border);cursor:pointer;flex-shrink:0;border:none;padding:0;}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;}
+  .switch.on{background:var(--accent);}
+  .switch.on::after{left:18px;}
+  .theme-options{display:flex;gap:10px;}
+  .theme-opt{flex:1;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;cursor:pointer;font-size:12px;}
+  .theme-opt.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .color-input{width:40px;height:32px;padding:2px;}
+
+  /* ---------- MODALS ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50;}
+  .modal{background:var(--surface);border-radius:14px;padding:22px;width:360px;max-width:90vw;}
+  .modal h3{margin:0 0 4px;font-size:16px;}
+  .modal .desc{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+  .modal-error{color:var(--danger);font-size:12px;margin-top:6px;min-height:14px;}
+  .link-row{display:flex;gap:8px;margin-bottom:14px;}
+  .link-row input{flex:1;}
+
+  /* ---------- AI PANEL (per-note) ---------- */
+  #ai-panel{position:fixed;top:0;right:0;bottom:0;width:320px;background:var(--surface);border-left:1px solid var(--border);z-index:40;padding:18px;overflow-y:auto;}
+  .ai-panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .ai-action{width:100%;text-align:left;margin-bottom:8px;}
+  .ai-result{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:12px;margin-top:10px;color:var(--text-2);}
+
+  .sidebar-backdrop{display:none;}
+
+  /* ---------- MOBILE / RESPONSIVE ---------- */
+  @media (max-width:860px){
+    /* Stack the shell vertically so the mobile topbar is a real flex item flush
+       at the very top, instead of a child of .main faked into place with negative
+       margins (which left a gap above it once the page scrolled). */
+    #app-shell{display:flex;flex-direction:column;height:100vh;}
+    .main{padding:16px;flex:1;min-height:0;}
+    .mobile-topbar{
+      display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;
+      border-bottom:1px solid var(--border);background:var(--surface);
+      flex-shrink:0;position:relative;
+    }
+    /* Menu button is pulled out of flow so the brand can sit truly centered
+       in the middle of the header regardless of the button's width. */
+    .mobile-topbar > button.icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);}
+    .sidebar{
+      position:fixed;top:0;left:0;bottom:0;width:280px !important;max-width:84vw;
+      transform:translateX(-100%);transition:transform .2s ease;z-index:41;box-shadow:0 0 0 transparent;
+    }
+    .sidebar.open{transform:translateX(0);box-shadow:2px 0 24px rgba(0,0,0,.18);}
+    .sidebar.collapsed{width:280px !important;transform:translateX(-100%);overflow:visible;padding:16px 12px;}
+    .sidebar-resize-handle,.sidebar-collapse-btn{display:none;}
+    .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:40;}
+    .sidebar-backdrop.open{display:block;}
+
+    .view-head{flex-direction:column;align-items:flex-start;gap:10px;}
+    .toolbar-row{width:100%;}
+    .search-box{width:100%;}
+    .notes-grid{grid-template-columns:1fr;}
+    .settings-grid{max-width:none;}
+    /* Mind map: don't squash it to the viewport width (illegible). Give it a
+       fixed, legible size and let the wrapper scroll/pan horizontally instead. */
+    /* The map is now pannable (drag/touch), so instead of shrinking everything to fit
+       or forcing a fixed-width horizontal scroller, we default to a zoomed-in window
+       on small screens (see renderMindMap) and let the user pan to reach the rest. */
+    .mindmap-wrap{overflow:hidden;}
+    #mindmap-svg{width:100%;max-height:420px !important;}
+    .theme-options{flex-wrap:wrap;}
+    .theme-opt{min-width:calc(50% - 5px);flex:none;}
+
+    /* Editor toolbar + header icons: bump up to real touch-target size (44px) */
+    .editor-head{gap:8px;}
+    .editor-actions{margin-left:0;width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px;}
+    .editor-actions button.icon{width:44px;height:44px;font-size:17px;}
+    .toolbar{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding:8px;gap:8px;}
+    .toolbar button.icon{width:44px;height:44px;font-size:16px;flex-shrink:0;}
+    .toolbar select{min-height:44px;flex-shrink:0;}
+    .toolbar .sep{height:28px;flex-shrink:0;}
+    #font-size-input{width:64px;min-height:44px;font-size:15px;flex-shrink:0;}
+    .swatch{width:32px;height:32px;flex-shrink:0;}
+    .toolbar button.ghost{min-height:44px;flex-shrink:0;}
+
+    .tag-row{flex-direction:column;gap:12px;}
+    .tag-field{min-width:0;width:100%;}
+    .tag-field select{width:100%;min-height:44px;}
+    .mm-list-row{flex-wrap:wrap;}
+    .mm-list-row select{width:100%;min-height:40px;}
+    #ai-panel{width:100%;}
+    .modal{width:92vw;}
+    .voice-strip{flex-wrap:wrap;}
+    .voice-strip input[type=text]{flex:1 1 100% !important;width:100% !important;order:-1;margin-bottom:4px;}
+    .voice-strip button.icon{width:40px;height:40px;}
+    .editor-foot{flex-direction:column;align-items:flex-start;gap:10px;}
+    .editor-foot button{min-height:44px;}
+    .link-row{flex-direction:column;}
+  }
+  @media (max-width:420px){
+    .auth-card{padding:22px;}
+    .view-title{font-size:18px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH SCREEN ============ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="brand"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+    <div class="auth-tagline">Write freely, and Mind Archive quietly turns your notes into a living map of what you've been thinking — searchable by mood, topic, or moment in time, with a timeline you can scroll back through whenever you want to remember.</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Log in</div>
+      <div class="auth-tab" id="tab-signup" onclick="setAuthTab('signup')">Sign up</div>
+    </div>
+    <form id="form-login" onsubmit="return doAuth(event)">
+      <div class="field"><label>Email</label><input type="email" placeholder="you@email.com" required></div>
+      <div class="field"><label>Password</label><input type="password" placeholder="Enter your password" required></div>
+      <div class="modal-error" id="auth-error" style="text-align:center;"></div>
+      <button type="submit" class="primary" style="width:100%">Log in</button>
+    </form>
+    <form id="form-signup" class="hidden" onsubmit="return doAuth(event)">
+      <div class="field"><label>Name</label><input type="text" placeholder="Jay Wilson" required></div>
+      <div class="field"><label>Email</label><input type="email" placeholder="you@email.com" required></div>
+      <div class="field"><label>Password</label><input type="password" placeholder="Create a password (6+ characters)" minlength="6" required></div>
+      <div class="modal-error" id="auth-error" style="text-align:center;"></div>
+      <button type="submit" class="primary" style="width:100%">Create account</button>
+    </form>
+    <div class="auth-foot">Your notes are private to your account and only visible when you're logged in.</div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app-shell" class="hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="brand"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+    </div>
+    <button class="primary" style="width:100%;margin-bottom:16px;" onclick="createNote()">+ New note</button>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-timeline" onclick="navigate('timeline')"><span class="ico">&#9202;</span> Timeline</div>
+      <div class="nav-item" id="nav-mindmap" onclick="navigate('mindmap')"><span class="ico">&#10022;</span> Mind map</div>
+      <div class="nav-item" id="nav-ai" onclick="navigate('ai')"><span class="ico">&#9670;</span> AI chat</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Folders</div>
+      <div id="folder-list"></div>
+      <div class="nav-item" style="color:var(--text-muted);" onclick="openModal('modal-folder')">+ New folder</div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="user-menu hidden" id="user-menu">
+        <button onclick="navigate('settings');closeUserMenu();">Settings</button>
+        <button onclick="logout()">Log out</button>
+      </div>
+      <div class="user-chip" onclick="toggleUserMenu()">
+        <div class="user-avatar" id="user-avatar">J</div>
+        <div style="flex:1;">
+          <div style="font-size:12px;font-weight:600;" id="user-name-chip">Jay</div>
+          <div style="font-size:11px;color:var(--text-muted);">Free plan</div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle" title="Drag to resize"></div>
+  </aside>
+  <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">&#10094;</button>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+
+  <!-- Sibling of .sidebar/.main (not nested inside .main) so on mobile it can be a
+       real flex item flush at the top of the column, instead of faked into place
+       with negative margins on a child element. -->
+  <div class="mobile-topbar">
+    <button class="icon ghost" onclick="toggleMobileSidebar()" aria-label="Open menu">&#9776;</button>
+    <div class="brand"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+  </div>
+
+  <main class="main">
+    <!-- NOTES VIEW -->
+    <section class="view active" id="view-notes">
+      <div class="view-head">
+        <div>
+          <div class="view-title" id="notes-heading">All notes</div>
+          <div class="view-sub" id="notes-count-sub"></div>
+        </div>
+        <div class="toolbar-row">
+          <div class="search-box"><input type="search" id="search-input" placeholder="Search notes..." oninput="renderNotesList()"></div>
+        </div>
+      </div>
+      <div class="filter-row" id="filter-row-notes"></div>
+      <div class="notes-grid" id="notes-grid"></div>
+    </section>
+
+    <!-- EDITOR VIEW -->
+    <section class="view" id="view-editor">
+      <button class="ghost" onclick="navigate('notes')" style="margin-bottom:14px;">&larr; Back to notes</button>
+      <div class="editor-head">
+        <input type="text" id="editor-title" class="editor-title-input" placeholder="Untitled note" oninput="onEditorChange()">
+        <div class="editor-actions">
+          <button class="icon" title="Lock note" id="btn-lock" onclick="onLockClick()">&#128274;</button>
+          <button class="icon" title="Voice memo" id="btn-voice" onclick="toggleVoiceRecord()">&#127908;</button>
+          <button class="icon" title="Share" onclick="openShare()">&#8599;</button>
+          <button class="icon" id="btn-ai" title="Ask AI about this note" onclick="openAiPanel()">&#10022;</button>
+        </div>
+      </div>
+      <div class="editor-sub">
+        <span>Folder:</span>
+        <select id="editor-folder" onchange="onEditorChange()" style="width:auto;"></select>
+        <span id="editor-date"></span>
+      </div>
+      <div id="voice-recording-bar" class="hidden voice-strip">
+        <span style="color:var(--danger);">&#9679; Recording</span>
+        <span id="record-timer">0:00</span>
+        <button class="ghost" onclick="toggleVoiceRecord()">Stop</button>
+      </div>
+      <div class="toolbar">
+        <select id="font-family-select" onchange="applyFont(this.value)" title="Font">
+          <option value="inherit">Sans</option>
+          <option value="var(--font-serif)">Serif</option>
+          <option value="'Courier New',monospace">Mono</option>
+        </select>
+        <button class="ghost" title="Import a font file" onclick="document.getElementById('font-file-input').click()">Import font</button>
+        <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2" class="hidden" onchange="importFont(event)">
+        <div class="sep"></div>
+        <button class="icon" title="Decrease size" onclick="stepFontSize(-1)">&minus;</button>
+        <input type="number" id="font-size-input" value="12" min="6" max="96" step="1" title="Font size (pt)" onchange="applyFontSize(this.value)">
+        <button class="icon" title="Increase size" onclick="stepFontSize(1)">+</button>
+        <div class="sep"></div>
+        <button class="icon" onclick="fmt('bold')" title="Bold"><b>B</b></button>
+        <button class="icon" onclick="fmt('italic')" title="Italic"><i>I</i></button>
+        <button class="icon" onclick="fmt('underline')" title="Underline"><u>U</u></button>
+        <div class="sep"></div>
+        <input type="color" class="swatch" title="Text color" onchange="fmt('foreColor', this.value)" value="#7f6a4d">
+        <button class="icon" title="Insert image" onclick="document.getElementById('image-input').click()">&#128247;</button>
+        <input type="file" id="image-input" accept="image/*" class="hidden" onchange="insertImage(event)">
+      </div>
+      <div id="note-content" contenteditable="true" oninput="onEditorChange()"></div>
+      <div id="voice-memos"></div>
+      <div id="ai-hint-box"></div>
+      <div class="tag-row">
+        <div class="tag-field"><label>Mood</label><select id="editor-mood" onchange="onEditorChange()"></select></div>
+        <div class="tag-field"><label>Topic</label><select id="editor-topic" onchange="onTopicSelectChange()"></select></div>
+        <div class="tag-field"><label>Activity</label><select id="editor-activity" onchange="onActivitySelectChange()"></select></div>
+      </div>
+      <div class="editor-foot">
+        <div style="display:flex;gap:8px;">
+          <button class="danger" onclick="deleteNote()">Delete note</button>
+          <button class="primary" onclick="saveNote()">Save note</button>
+        </div>
+        <span class="save-flag" id="save-flag">All changes saved</span>
+      </div>
+    </section>
+
+    <!-- TIMELINE VIEW -->
+    <section class="view" id="view-timeline">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Timeline</div>
+          <div class="view-sub">Scroll through your life, or jump to a moment.</div>
+        </div>
+        <div class="toolbar-row">
+          <button onclick="jumpTimeline('week')">This week</button>
+          <button onclick="jumpTimeline('month')">Last month</button>
+          <button onclick="jumpTimeline('year')">Last year</button>
+        </div>
+      </div>
+      <div class="filter-row" id="filter-row-timeline"></div>
+      <div class="timeline" id="timeline-list"></div>
+    </section>
+
+    <!-- MIND MAP VIEW -->
+    <section class="view" id="view-mindmap">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Mind map</div>
+          <div class="view-sub" id="mindmap-sub">Drag to move around. Click a topic to see its notes. Click a note to open it.</div>
+        </div>
+        <div class="toolbar-row">
+          <button class="ghost" id="btn-mm-list-mode" onclick="toggleMindMapListMode()" title="Show a list instead of nodes when you click a topic">&#9776; List mode: Off</button>
+          <button class="ghost" onclick="recenterMindMap()" title="Recenter the map">&#8982; Recenter</button>
+          <button class="primary" onclick="runWellnessCheck()">&#10022; AI wellness check</button>
+        </div>
+      </div>
+      <div id="wellness-result"></div>
+      <div class="mm-topics-manager" id="mm-topics-manager"></div>
+      <div class="mindmap-wrap">
+        <svg id="mindmap-svg" viewBox="0 0 780 580" width="100%" preserveAspectRatio="xMidYMid meet" style="max-height:560px;"></svg>
+        <div class="mm-legend" id="mm-legend"></div>
+      </div>
+      <div class="mm-list-panel hidden" id="mm-list-panel"></div>
+    </section>
+
+    <!-- AI CHAT VIEW -->
+    <section class="view" id="view-ai">
+      <div class="view-head">
+        <div>
+          <div class="view-title">AI chat</div>
+          <div class="view-sub">Ask questions, think out loud, or turn the conversation into a note.</div>
+        </div>
+        <div class="toolbar-row">
+          <button onclick="clearAiChat()">New conversation</button>
+          <button class="primary" onclick="summarizeChatToNote()">Save as note</button>
+        </div>
+      </div>
+      <div id="ai-chat-disabled" class="hidden ai-off">
+        AI is turned off.<br><br><button onclick="toggleAi();renderAiChatView();">Turn on AI</button>
+      </div>
+      <div id="ai-chat-enabled">
+        <div id="ai-chat-log"></div>
+        <div style="display:flex;gap:8px;max-width:640px;">
+          <input type="text" id="ai-chat-input" placeholder="Ask the AI anything..." onkeydown="if(event.key==='Enter'){sendAiChat();}">
+          <button class="primary" onclick="sendAiChat()">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS VIEW -->
+    <section class="view" id="view-settings">
+      <div class="view-head">
+        <div class="view-title">Settings</div>
+        <div class="toolbar-row">
+          <span id="settings-save-flag" style="font-size:12px;color:var(--accent);"></span>
+          <button class="primary" onclick="saveSettings()">Save settings</button>
+        </div>
+      </div>
+      <div class="settings-grid">
+
+        <div class="settings-card">
+          <h3>Account management</h3>
+          <div class="desc">Manage your profile and account access. Click Save settings above to apply.</div>
+          <div class="field"><label>Name</label><input type="text" id="set-name" oninput="settingsDraft.name=this.value"></div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="set-email" oninput="settingsDraft.email=this.value">
+            <div class="sub" id="email-change-status" style="margin-top:4px;"></div>
+          </div>
+          <div class="setting-row" style="border-top:1px solid var(--border);padding-top:12px;">
+            <div><div class="label">Change password</div><div class="sub">Update your account password</div></div>
+            <button onclick="openChangePassword()">Change</button>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Log out of all devices</div><div class="sub">Ends every active session, including this one</div></div>
+            <button onclick="logoutAllDevices()">Log out all</button>
+          </div>
+          <div class="setting-row">
+            <div><div class="label" style="color:var(--danger);">Delete account</div><div class="sub">Permanently deletes all your notes, recordings, and profile data.</div></div>
+            <button class="danger" onclick="openDeleteAccount()">Delete</button>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>Theme / UI</h3>
+          <div class="desc">Choose how Mind Archive looks. Click Save settings above to apply.</div>
+          <div class="theme-options">
+            <div class="theme-opt" id="mode-opt-light" onclick="setDraftColorMode('light')">&#9728; Light</div>
+            <div class="theme-opt" id="mode-opt-dark" onclick="setDraftColorMode('dark')">&#9790; Dark</div>
+            <div class="theme-opt" id="mode-opt-auto" onclick="setDraftColorMode('auto')">&#9200; Auto</div>
+          </div>
+          <div class="sub hidden" id="auto-theme-status" style="margin-top:8px;"></div>
+          <div class="setting-row" style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px;">
+            <div><div class="label">Accent color</div><div class="sub" id="accent-status-sub">Using the default color</div></div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="color" class="color-input" id="custom-accent" value="#7f6a4d" oninput="setDraftAccent(this.value)">
+              <button onclick="resetDraftAccent()" style="font-size:12px;padding:6px 10px;">Reset</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Import theme file</div><div class="sub">.json with an "accent" field</div></div>
+            <button onclick="document.getElementById('theme-file').click()">Import</button>
+            <input type="file" id="theme-file" accept=".json" class="hidden" onchange="importTheme(event)">
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>Note settings</h3>
+          <div class="desc">Defaults applied to new notes. Click Save settings above to apply.</div>
+          <div class="setting-row">
+            <div><div class="label">Default font</div></div>
+            <select id="set-default-font" style="width:140px;" onchange="settingsDraft.defaultFont=this.value">
+              <option value="inherit">Sans</option>
+              <option value="var(--font-serif)">Serif</option>
+              <option value="'Courier New',monospace">Mono</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Autosave</div><div class="sub">Save note changes as you type. Off = use the Save note button.</div></div>
+            <button class="switch on" id="switch-autosave" onclick="toggleDraftSwitch('autosave')"></button>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Export all notes</div><div class="sub">Download as JSON</div></div>
+            <button onclick="exportNotes()">Export</button>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>AI</h3>
+          <div class="desc">Control Mind Archive's AI assistant. Click Save settings above to apply.</div>
+          <div class="setting-row">
+            <div><div class="label">Enable AI assistant</div><div class="sub">Chat, suggestions, tagging, reflections</div></div>
+            <button class="switch on" id="switch-ai" onclick="toggleDraftSwitch('aiEnabled')"></button>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Auto-tag mood &amp; topic</div></div>
+            <button class="switch on" id="switch-ai-tag" onclick="toggleDraftSwitch('aiAutoTag')"></button>
+          </div>
+          <div class="setting-row">
+            <div><div class="label">Weekly reflection digest</div></div>
+            <button class="switch" id="switch-ai-digest" onclick="toggleDraftSwitch('aiDigest')"></button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ SHARED NOTE (public, read-only, no login) ============ -->
+<div id="shared-note-view" class="hidden" style="max-width:640px;margin:60px auto;padding:0 20px;">
+  <div id="shared-note-content"></div>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="overlay hidden" id="overlay" onclick="if(event.target===this) closeModal()">
+  <div class="modal hidden" id="modal-folder">
+    <h3>New folder</h3>
+    <div class="desc">Group related notes together.</div>
+    <input type="text" id="new-folder-name" placeholder="Folder name">
+    <div class="modal-actions"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="addFolder()">Create</button></div>
+  </div>
+
+  <div class="modal hidden" id="modal-lock">
+    <h3 id="lock-title">Lock note</h3>
+    <div class="desc" id="lock-desc">Set a password to keep this note private.</div>
+    <input type="password" id="lock-password" placeholder="Password">
+    <div class="modal-error" id="lock-error"></div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" id="lock-confirm-btn" onclick="confirmLock()">Lock note</button>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modal-share">
+    <h3>Share note</h3>
+    <div class="desc">Anyone with this link can <span id="share-perm-word">view</span> "<span id="share-note-title"></span>" — no account needed. Send it however you like (text, email, etc).</div>
+    <div class="link-row"><input type="text" id="share-link" readonly><button onclick="copyShareLink()">Copy</button></div>
+    <div class="field" style="margin-top:10px;">
+      <label>Permission</label>
+      <select id="share-permission" onchange="setSharePermission(this.value)">
+        <option value="view">Can view</option>
+        <option value="edit">Can edit</option>
+      </select>
+    </div>
+    <div class="modal-error" id="share-error"></div>
+    <div class="modal-actions"><button class="danger" id="unshare-btn" onclick="stopSharingNote()">Stop sharing</button><button onclick="closeModal()">Done</button></div>
+  </div>
+
+  <div class="modal hidden" id="modal-add-filter">
+    <h3>Add filter</h3>
+    <div class="desc">Create a custom mood, topic, or activity tag.</div>
+    <div class="field"><label>Name</label><input type="text" id="new-filter-name" placeholder="e.g. Excited"></div>
+    <div class="field"><label>Category</label>
+      <select id="new-filter-category"><option value="mood">Mood</option><option value="topic">Topic</option><option value="activity">Activity</option></select>
+    </div>
+    <div class="modal-actions"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="confirmAddFilter()">Add filter</button></div>
+  </div>
+
+  <div class="modal hidden" id="modal-delete-note">
+    <h3>Delete note</h3>
+    <div class="desc">Enter your account password to confirm. This can't be undone.</div>
+    <input type="password" id="delete-note-password" placeholder="Account password">
+    <div class="modal-error" id="delete-note-error"></div>
+    <div class="modal-actions"><button onclick="closeModal()">Cancel</button><button class="danger" id="confirm-delete-note-btn" onclick="confirmDeleteNote()">Delete note</button></div>
+  </div>
+
+  <div class="modal hidden" id="modal-change-password">
+    <h3>Change password</h3>
+    <div class="desc">Enter your current password, then choose a new one.</div>
+    <input type="password" id="change-pw-current" placeholder="Current password">
+    <input type="password" id="change-pw-new" placeholder="New password (min 6 characters)" style="margin-top:8px;">
+    <input type="password" id="change-pw-confirm" placeholder="Confirm new password" style="margin-top:8px;">
+    <div class="modal-error" id="change-pw-error"></div>
+    <div class="modal-actions"><button onclick="closeModal()">Cancel</button><button class="primary" id="confirm-change-pw-btn" onclick="confirmChangePassword()">Change password</button></div>
+  </div>
+
+  <div class="modal hidden" id="modal-delete-account">
+    <h3>Delete account</h3>
+    <div class="desc">This permanently deletes all your notes, voice memos, and profile data, and signs you out. Enter your password to confirm — this can't be undone.</div>
+    <input type="password" id="delete-account-password" placeholder="Account password">
+    <div class="modal-error" id="delete-account-error"></div>
+    <div class="modal-actions"><button onclick="closeModal()">Cancel</button><button class="danger" id="confirm-delete-account-btn" onclick="confirmDeleteAccountAction()">Delete my account</button></div>
+  </div>
+</div>
+
+<!-- ============ AI PANEL (per-note quick actions) ============ -->
+<div id="ai-panel" class="hidden">
+  <div class="ai-panel-head"><h3 style="margin:0;font-size:15px;">AI assistant</h3><button class="icon ghost" onclick="closeAiPanel()">&times;</button></div>
+  <div id="ai-panel-body"></div>
+</div>
+
+<script>
+/* ---------------- SUPABASE CONFIG ---------------- */
+/* Fill these in with your own project's values (Supabase dashboard → Project
+   Settings → API). The anon/public key is safe to expose in client code —
+   it can only do what your Row Level Security policies (see schema.sql)
+   allow, which is "each user can only touch their own rows". */
+const SUPABASE_URL = 'https://rzpvmwxfjadfgxbppfrw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6cHZtd3hmamFkZmd4YnBwZnJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1Mjc4NzksImV4cCI6MjEwMTEwMzg3OX0.ZBMQF8Py9gaUboHed_GEINEvMNSfBy_173YtP7p2wrE';
+// Guarded on purpose: if the Supabase library fails to load (offline, an ad
+// blocker, a CDN hiccup, or the config above hasn't been filled in yet), the
+// whole page used to crash silently with no clue why. Now the page still
+// loads and shows a clear message instead — see checkSupabaseReady() below.
+let supabaseClient = null;
+try{
+  if(window.supabase && typeof window.supabase.createClient === 'function'){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(err){ console.error('Could not initialize the Supabase client', err); }
+function checkSupabaseReady(){
+  if(SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY'){
+    return 'This site needs to be connected to a database first — add your Supabase project URL and key near the top of the code (see README.md).';
+  }
+  if(!supabaseClient){
+    return 'Could not connect to the backend. Check your internet connection (or ad blocker) and refresh the page.';
+  }
+  return null;
+}
+
+/* ---------------- STATE ---------------- */
+const MOODS = ['Happy','Calm','Reflective','Motivated','Anxious'];
+const MOOD_ICON = {Happy:'😊',Calm:'😌',Reflective:'😔',Motivated:'🔥',Anxious:'😰'};
+const TOPICS = ['Personal','Work','Travel','Ideas','Health'];
+const ACTIVITIES = ['Morning routine','Workout','Meeting','Reading','Trip','Therapy session','None'];
+const TOPIC_COLOR = {Personal:'#7f9fc9',Work:'#c98f5a',Travel:'#5aa88a',Ideas:'#b06fbf',Health:'#c96b6b'};
+const MM_TOPIC_PALETTE = ['#7f9fc9','#c98f5a','#5aa88a','#b06fbf','#c96b6b','#a3a24c','#5ab0c9','#c95a91','#8a8a86'];
+function nextTopicColor(){
+  const used = Object.values(TOPIC_COLOR);
+  return MM_TOPIC_PALETTE.find(c=>!used.includes(c)) || MM_TOPIC_PALETTE[TOPICS.length % MM_TOPIC_PALETTE.length];
+}
+
+let state = {
+  loggedIn:false,
+  user:{name:'Jay', email:'jadenbosswilson@gmail.com'},
+  accountPassword:'',
+  colorMode:'light',
+  useCustomAccent:false,
+  customAccent:'#7f6a4d',
+  autoThemeTimer:null,
+  aiEnabled:true,
+  autosave:true,
+  aiAutoTag:true,
+  aiDigest:false,
+  defaultFont:'inherit',
+  aiChat:[],
+  folders:['Personal','Work','Ideas','Journal'],
+  activeFolder:'All notes',
+  activeView:'notes',
+  activeNoteId:null,
+  pendingUnlockId:null,
+  pendingFilterCallback:null,
+  mindMapExpandedTopic:null,
+  mindMapListMode:false,
+  filters:{mood:null, topic:null, activity:null},
+  recording:false,
+  recordSeconds:0,
+  recordTimer:null,
+  notes:[]
+};
+let settingsDraft = null;
+
+/* ---------------- HELPERS ---------------- */
+const $ = id => document.getElementById(id);
+const uid = () => 'n' + Math.random().toString(36).slice(2,9);
+function stripHtml(html){ const t = document.createElement('div'); t.innerHTML = html; return t.textContent || ''; }
+function fmtDate(iso){ return new Date(iso).toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'}); }
+function monthKey(iso){ const dt = new Date(iso); return dt.toLocaleDateString(undefined,{month:'long', year:'numeric'}); }
+function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function flashSave(){
+  const f = $('save-flag'); if(!f) return;
+  f.style.color='var(--text-muted)';
+  f.textContent = 'Saving...';
+  clearTimeout(flashSave._t);
+  flashSave._t = setTimeout(()=>{ if(f){ f.textContent='All changes saved'; f.style.color='var(--text-muted)'; } }, 500);
+}
+
+/* ---------------- AUTH ---------------- */
+function setAuthTab(tab){
+  $('tab-login').classList.toggle('active', tab==='login');
+  $('tab-signup').classList.toggle('active', tab==='signup');
+  $('form-login').classList.toggle('hidden', tab!=='login');
+  $('form-signup').classList.toggle('hidden', tab!=='signup');
+  const err = $('auth-error'); if(err) err.textContent='';
+}
+async function doAuth(e){
+  e.preventDefault();
+  const usingSignup = !$('form-signup').classList.contains('hidden');
+  const form = usingSignup ? $('form-signup') : $('form-login');
+  const errBox = $('auth-error');
+  const notReady = checkSupabaseReady();
+  if(notReady){ errBox.style.color = 'var(--danger)'; errBox.textContent = notReady; return false; }
+  const emailField = form.querySelector('input[type="email"]');
+  const pwField = form.querySelector('input[type="password"]');
+  const nameField = form.querySelector('input[type="text"]');
+  const email = (emailField.value||'').trim();
+  const password = pwField.value;
+  errBox.textContent = '';
+  errBox.style.color = 'var(--danger)';
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = usingSignup ? 'Creating account…' : 'Logging in…';
+
+  try{
+    if(usingSignup){
+      const { data, error } = await supabaseClient.auth.signUp({
+        email, password,
+        options: { data: { display_name: (nameField.value||'').trim() } }
+      });
+      if(error) throw error;
+      if(!data.session){
+        // Project has "confirm email" turned on: there's no active session yet.
+        errBox.style.color = 'var(--text-2)';
+        errBox.textContent = 'Check your email to confirm your account, then log in below.';
+        setAuthTab('login');
+        return false;
+      }
+    } else {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+    }
+    await onAuthSuccess();
+  }catch(err){
+    errBox.style.color = 'var(--danger)';
+    errBox.textContent = (err && err.message) || 'Something went wrong. Please try again.';
+  }finally{
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalLabel;
+  }
+  return false;
+}
+// Runs after a successful sign-in OR when an existing session is restored on
+// page load — loads this user's data from Supabase and shows the app shell.
+async function onAuthSuccess(){
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if(!user) return;
+  state.user.email = user.email || state.user.email;
+  await loadUserData(user);
+  state.loggedIn = true;
+  $('auth-screen').classList.add('hidden');
+  $('app-shell').classList.remove('hidden');
+  $('user-name-chip').textContent = state.user.name;
+  $('user-avatar').textContent = (state.user.name||'?')[0].toUpperCase();
+  applyColorMode();
+  renderSidebar();
+  navigate('notes');
+  if(typeof positionSidebarCollapseBtn === 'function') positionSidebarCollapseBtn();
+}
+// Fetches (or creates, for a brand-new account) this user's profile row —
+// their folders/topics/moods/activities/settings — and all of their notes.
+async function loadUserData(user){
+  let profile = null;
+  try{
+    const { data, error } = await supabaseClient.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if(error) throw error;
+    profile = data;
+  }catch(err){ console.error('Could not load profile', err); }
+
+  if(!profile){
+    const defaults = { id: user.id, display_name: (user.user_metadata && user.user_metadata.display_name) || (user.email||'').split('@')[0] };
+    try{
+      const { data, error } = await supabaseClient.from('profiles').insert(defaults).select().single();
+      if(error) throw error;
+      profile = data;
+    }catch(err){ console.error('Could not create profile', err); profile = defaults; }
+  }
+
+  state.user.name = profile.display_name || state.user.name;
+  state.folders = (profile.folders && profile.folders.length) ? profile.folders.slice() : ['Personal'];
+  TOPICS.splice(0, TOPICS.length, ...((profile.topics && profile.topics.length) ? profile.topics : ['Personal']));
+  Object.keys(TOPIC_COLOR).forEach(k=>delete TOPIC_COLOR[k]);
+  Object.assign(TOPIC_COLOR, profile.topic_colors || {});
+  ACTIVITIES.splice(0, ACTIVITIES.length, ...((profile.activities && profile.activities.length) ? profile.activities : ['None']));
+  MOODS.splice(0, MOODS.length, ...((profile.moods && profile.moods.length) ? profile.moods : ['Calm']));
+  state.colorMode = profile.color_mode || 'light';
+  state.useCustomAccent = !!profile.use_custom_accent;
+  state.customAccent = profile.custom_accent || '#7f6a4d';
+  state.aiEnabled = profile.ai_enabled !== false;
+  state.autosave = profile.autosave !== false;
+  state.aiAutoTag = profile.ai_auto_tag !== false;
+  state.aiDigest = !!profile.ai_digest;
+  state.defaultFont = profile.default_font || 'inherit';
+
+  try{
+    const { data: notes, error } = await supabaseClient.from('notes').select('*').eq('user_id', user.id).order('date', { ascending:false });
+    if(error) throw error;
+    state.notes = (notes||[]).map(row => ({
+      id: row.id, title: row.title, folder: row.folder, date: row.date, mood: row.mood, topic: row.topic,
+      activity: row.activity, tags: row.tags||[], locked: row.locked, password: row.note_password,
+      content: row.content, voices: row.voices||[], fontSize: row.font_size, shareToken: row.share_token || null,
+      sharePermission: row.share_permission || 'view'
+    }));
+  }catch(err){ console.error('Could not load notes', err); state.notes = []; }
+}
+async function logout(){
+  try{ if(supabaseClient) await supabaseClient.auth.signOut(); }catch(err){ console.error('Sign out failed', err); }
+  state.loggedIn = false;
+  state.notes = [];
+  state.activeNoteId = null;
+  $('app-shell').classList.add('hidden');
+  $('auth-screen').classList.remove('hidden');
+  closeUserMenu();
+}
+async function logoutAllDevices(){
+  if(!supabaseClient){ alert(checkSupabaseReady() || 'Not connected.'); return; }
+  // scope:'global' revokes every session for this account, not just this
+  // browser tab — a real Supabase call, not a local-only sign-out.
+  try{ await supabaseClient.auth.signOut({ scope: 'global' }); }
+  catch(err){ console.error('Sign out failed', err); }
+  state.loggedIn = false;
+  state.notes = [];
+  state.activeNoteId = null;
+  $('app-shell').classList.add('hidden');
+  $('auth-screen').classList.remove('hidden');
+  closeUserMenu();
+}
+function toggleUserMenu(){ $('user-menu').classList.toggle('hidden'); }
+function closeUserMenu(){ $('user-menu').classList.add('hidden'); }
+
+/* ---------------- CLOUD SYNC ----------------
+   Local-first: every action still updates `state` immediately so the UI never
+   waits on the network. These helpers push that same change to Supabase in
+   the background (debounced, so fast typing doesn't spam the network), and
+   just log to the console on failure rather than blocking the UI — if a sync
+   fails, your next edit will simply try again a moment later. */
+const noteSyncTimers = {};
+function scheduleNoteSync(n){
+  if(!n) return;
+  clearTimeout(noteSyncTimers[n.id]);
+  noteSyncTimers[n.id] = setTimeout(()=>syncNoteNow(n), 600);
+}
+async function syncNoteNow(n){
+  if(!supabaseClient) return;
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if(!user) return;
+  const payload = {
+    id: n.id, user_id: user.id, title: n.title||'', folder: n.folder,
+    date: (n.date||'').slice(0,10) || new Date().toISOString().slice(0,10),
+    mood: n.mood, topic: n.topic, activity: n.activity, tags: n.tags||[], locked: !!n.locked,
+    note_password: n.password || null, content: n.content||'',
+    // Only persist the durable fields — not transient UI state (uploading/
+    // uploadFailed flags) or the in-memory Audio element attached during playback.
+    voices: (n.voices||[]).map(v => ({ id: v.id, name: v.name, duration: v.duration, path: v.path || null })),
+    font_size: n.fontSize || null,
+    share_token: n.shareToken || null,
+    share_permission: n.sharePermission || 'view'
+  };
+  const { error } = await supabaseClient.from('notes').upsert(payload);
+  if(error) console.error('Could not save this note to the cloud (will retry on next edit):', error);
+}
+async function deleteNoteRemote(id){
+  if(!supabaseClient) return;
+  const { error } = await supabaseClient.from('notes').delete().eq('id', id);
+  if(error) console.error('Could not delete this note from the cloud:', error);
+}
+let profileSyncTimer = null;
+function scheduleProfileSync(){
+  clearTimeout(profileSyncTimer);
+  profileSyncTimer = setTimeout(syncProfileNow, 600);
+}
+async function syncProfileNow(){
+  if(!supabaseClient) return;
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if(!user) return;
+  const payload = {
+    id: user.id, display_name: state.user.name, folders: state.folders,
+    topics: TOPICS, topic_colors: TOPIC_COLOR, activities: ACTIVITIES, moods: MOODS,
+    color_mode: state.colorMode, use_custom_accent: state.useCustomAccent, custom_accent: state.customAccent,
+    ai_enabled: state.aiEnabled, autosave: state.autosave, ai_auto_tag: state.aiAutoTag,
+    ai_digest: state.aiDigest, default_font: state.defaultFont
+  };
+  const { error } = await supabaseClient.from('profiles').upsert(payload);
+  if(error) console.error('Could not save your settings to the cloud (will retry):', error);
+}
+
+/* ---------------- NAVIGATION ---------------- */
+function navigate(view){
+  closeMobileSidebar();
+  state.activeView = view;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  $('view-'+view).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const navEl = $('nav-'+view); if(navEl) navEl.classList.add('active');
+  if(view==='notes') renderNotesList();
+  if(view==='timeline') renderTimeline();
+  if(view==='mindmap'){ const wr=$('wellness-result'); if(wr) wr.innerHTML=''; renderMindMap(); }
+  if(view==='settings') renderSettings();
+  if(view==='ai') renderAiChatView();
+}
+
+/* ---------------- SIDEBAR / FOLDERS ---------------- */
+function renderSidebar(){
+  const list = $('folder-list'); list.innerHTML='';
+  const allRow = document.createElement('div');
+  allRow.className='nav-item folder-row' + (state.activeFolder==='All notes' ? ' active':'');
+  const allLabel = document.createElement('span'); allLabel.textContent='All notes';
+  const allCnt = document.createElement('span'); allCnt.className='cnt'; allCnt.textContent=state.notes.length;
+  allRow.appendChild(allLabel); allRow.appendChild(allCnt);
+  allRow.onclick = ()=>{ state.activeFolder='All notes'; navigate('notes'); renderSidebar(); };
+  list.appendChild(allRow);
+
+  state.folders.forEach(f=>{
+    const cnt = state.notes.filter(n=>n.folder===f).length;
+    const row = document.createElement('div');
+    row.className='nav-item folder-row' + (state.activeFolder===f ? ' active':'');
+    const nameSpan = document.createElement('span'); nameSpan.textContent = f;
+    const right = document.createElement('span'); right.className='folder-row-right';
+    const cntSpan = document.createElement('span'); cntSpan.className='cnt'; cntSpan.textContent=cnt;
+    const delBtn = document.createElement('button'); delBtn.className='folder-del'; delBtn.title='Delete folder'; delBtn.textContent='×';
+    delBtn.onclick = (e)=>{ e.stopPropagation(); deleteFolder(f); };
+    const moreBtn = document.createElement('button'); moreBtn.className='folder-more'; moreBtn.title='More options'; moreBtn.setAttribute('aria-label','More options'); moreBtn.textContent='⋯';
+    moreBtn.onclick = (e)=>{ e.stopPropagation(); revealDelete(delBtn); };
+    right.appendChild(cntSpan); right.appendChild(moreBtn); right.appendChild(delBtn);
+    row.appendChild(nameSpan); row.appendChild(right);
+    row.onclick = ()=>{ state.activeFolder=f; navigate('notes'); renderSidebar(); };
+    list.appendChild(row);
+  });
+}
+function addFolder(){
+  const name = $('new-folder-name').value.trim();
+  if(!name) return;
+  if(state.folders.includes(name)){ alert('That folder already exists.'); return; }
+  state.folders.push(name);
+  scheduleProfileSync();
+  $('new-folder-name').value='';
+  closeModal();
+  renderSidebar();
+}
+function deleteFolder(name){
+  const affectedNotes = state.notes.filter(n=>n.folder===name);
+  const count = affectedNotes.length;
+  const msg = count>0
+    ? `Delete folder "${name}"? ${count} note${count===1?'':'s'} inside will move to another folder.`
+    : `Delete folder "${name}"?`;
+  if(!confirm(msg)) return;
+  state.folders = state.folders.filter(f=>f!==name);
+  if(state.folders.length===0) state.folders.push('Personal');
+  const fallback = state.folders[0];
+  affectedNotes.forEach(n=>{ n.folder = fallback; scheduleNoteSync(n); });
+  scheduleProfileSync();
+  if(state.activeFolder===name) state.activeFolder='All notes';
+  renderSidebar();
+  if(state.activeView==='notes') renderNotesList();
+}
+
+/* ---------------- FILTER CHIPS (addable / deletable) ---------------- */
+function renderFilterChips(containerId, onChange){
+  const el = $(containerId); el.innerHTML='';
+  const groups = [['mood',MOODS],['topic',TOPICS],['activity',ACTIVITIES.filter(a=>a!=='None')]];
+  groups.forEach(([key, values])=>{
+    values.forEach(v=>{
+      const chip = document.createElement('div');
+      chip.className='chip' + (state.filters[key]===v ? ' active':'');
+      const label = document.createElement('span'); label.textContent = v;
+      chip.appendChild(label);
+      chip.onclick = ()=>{ state.filters[key] = state.filters[key]===v ? null : v; onChange(); };
+      const del = document.createElement('button');
+      del.className='chip-del'; del.textContent='×'; del.title='Remove this filter option'; del.setAttribute('aria-label','Remove '+v);
+      del.onclick = (e)=>{ e.stopPropagation(); deleteFilterValue(key, v, onChange); };
+      const more = document.createElement('button');
+      more.className='chip-more'; more.textContent='⋯'; more.title='More options'; more.setAttribute('aria-label','More options for '+v);
+      more.onclick = (e)=>{ e.stopPropagation(); revealDelete(del); };
+      chip.appendChild(more);
+      chip.appendChild(del);
+      el.appendChild(chip);
+    });
+  });
+  const addChip = document.createElement('div');
+  addChip.className='chip chip-add';
+  addChip.textContent='+ Add filter';
+  addChip.onclick = (e)=>{ e.stopPropagation(); openAddFilter(onChange); };
+  el.appendChild(addChip);
+
+  const anyActive = Object.values(state.filters).some(Boolean);
+  if(anyActive){
+    const clear = document.createElement('div');
+    clear.className='chip'; clear.style.color='var(--danger)';
+    clear.textContent='Clear filters';
+    clear.onclick = ()=>{ state.filters={mood:null,topic:null,activity:null}; onChange(); };
+    el.appendChild(clear);
+  }
+}
+function openAddFilter(callback){
+  state.pendingFilterCallback = callback;
+  $('new-filter-name').value='';
+  openModal('modal-add-filter');
+}
+function confirmAddFilter(){
+  const name = $('new-filter-name').value.trim();
+  if(!name) return;
+  const cat = $('new-filter-category').value;
+  const arr = cat==='mood' ? MOODS : cat==='topic' ? TOPICS : ACTIVITIES;
+  if(!arr.includes(name)) arr.push(name);
+  scheduleProfileSync();
+  closeModal();
+  if(state.pendingFilterCallback) state.pendingFilterCallback();
+}
+function deleteFilterValue(key, v, callback){
+  if(!confirm(`Remove "${v}" from ${key} filters?`)) return;
+  const arr = key==='mood' ? MOODS : key==='topic' ? TOPICS : ACTIVITIES;
+  const idx = arr.indexOf(v);
+  if(idx>-1) arr.splice(idx,1);
+  if(state.filters[key]===v) state.filters[key]=null;
+  scheduleProfileSync();
+  if(callback) callback();
+}
+function filteredNotes(list){
+  const q = ($('search-input') && $('search-input').value || '').toLowerCase();
+  return list.filter(n=>{
+    if(state.filters.mood && n.mood!==state.filters.mood) return false;
+    if(state.filters.topic && n.topic!==state.filters.topic) return false;
+    if(state.filters.activity && n.activity!==state.filters.activity) return false;
+    if(q && !(n.title.toLowerCase().includes(q) || stripHtml(n.content).toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+/* ---------------- NOTES VIEW ---------------- */
+function renderNotesList(){
+  renderFilterChips('filter-row-notes', renderNotesList);
+  $('notes-heading').textContent = state.activeFolder;
+  let list = state.activeFolder==='All notes' ? state.notes.slice() : state.notes.filter(n=>n.folder===state.activeFolder);
+  list = filteredNotes(list).sort((a,b)=> new Date(b.date)-new Date(a.date));
+  $('notes-count-sub').textContent = `${list.length} note${list.length===1?'':'s'}`;
+  const grid = $('notes-grid'); grid.innerHTML='';
+  if(list.length===0){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">No notes match. Try clearing filters or search.</div>`;
+    return;
+  }
+  list.forEach(n=>{
+    const card = document.createElement('div');
+    card.className='note-card';
+    card.onclick = ()=>openNote(n.id);
+    const icons = [];
+    if(n.locked) icons.push('&#128274;');
+    if(n.voices && n.voices.length) icons.push('&#127908;');
+    if(/<img/.test(n.content)) icons.push('&#128247;');
+    card.innerHTML = `
+      <div class="note-card-top">
+        <h3>${escapeHtml(n.title)||'Untitled'}</h3>
+        <button class="icon ghost" title="Rename" onclick="event.stopPropagation();renameNote('${n.id}')" style="width:22px;height:22px;">&#9998;</button>
+      </div>
+      <div class="note-snippet">${n.locked ? 'This note is locked.' : escapeHtml(stripHtml(n.content))}</div>
+      <div class="note-meta">
+        <span>${fmtDate(n.date)} · ${MOOD_ICON[n.mood]||''} ${n.topic}</span>
+        <span class="note-icons">${icons.join(' ')}</span>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function renameNote(id){
+  const n = state.notes.find(x=>x.id===id);
+  const name = prompt('Rename note', n.title);
+  if(name!==null && name.trim()){ n.title = name.trim(); scheduleNoteSync(n); renderNotesList(); renderSidebar(); }
+}
+function createNote(){
+  const n = {id:crypto.randomUUID(), title:'', folder: state.activeFolder==='All notes' ? (state.folders[0]||'Personal') : state.activeFolder, date:new Date().toISOString(), mood:MOODS[0], topic:TOPICS[0], activity:'None', tags:[], locked:false, password:null, content:'', voices:[], shareToken:null, sharePermission:'view'};
+  state.notes.unshift(n);
+  scheduleNoteSync(n);
+  renderSidebar();
+  openNote(n.id);
+}
+
+/* ---------------- DELETE NOTE (requires account password + confirm) ---------------- */
+function deleteNote(){
+  if(!state.activeNoteId) return;
+  $('delete-note-password').value='';
+  $('delete-note-error').textContent='';
+  openModal('modal-delete-note');
+}
+async function confirmDeleteNote(){
+  if(!supabaseClient){ $('delete-note-error').textContent = checkSupabaseReady() || 'Not connected.'; return; }
+  const pw = $('delete-note-password').value;
+  const btn = $('confirm-delete-note-btn');
+  if(btn){ btn.disabled = true; }
+  // Re-verify the real account password against Supabase itself (a real
+  // sign-in check) instead of comparing against a locally-stored copy —
+  // your password is never held in the app's own memory or database.
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const { error } = await supabaseClient.auth.signInWithPassword({ email: user.email, password: pw });
+  if(btn){ btn.disabled = false; }
+  if(error){
+    $('delete-note-error').textContent = 'Incorrect password.';
+    return;
+  }
+  const deletedId = state.activeNoteId;
+  state.notes = state.notes.filter(n=>n.id!==deletedId);
+  deleteNoteRemote(deletedId);
+  closeModal();
+  renderSidebar();
+  navigate('notes');
+}
+
+/* ---------------- CHANGE PASSWORD (requires current password) ---------------- */
+function openChangePassword(){
+  $('change-pw-current').value = '';
+  $('change-pw-new').value = '';
+  $('change-pw-confirm').value = '';
+  $('change-pw-error').textContent = '';
+  openModal('modal-change-password');
+}
+async function confirmChangePassword(){
+  const errEl = $('change-pw-error');
+  errEl.textContent = '';
+  if(!supabaseClient){ errEl.textContent = checkSupabaseReady() || 'Not connected.'; return; }
+  const current = $('change-pw-current').value;
+  const next = $('change-pw-new').value;
+  const confirmPw = $('change-pw-confirm').value;
+  if(!current || !next || !confirmPw){ errEl.textContent = 'Fill in all three fields.'; return; }
+  if(next.length < 6){ errEl.textContent = 'New password must be at least 6 characters.'; return; }
+  if(next !== confirmPw){ errEl.textContent = 'New passwords do not match.'; return; }
+  const btn = $('confirm-change-pw-btn');
+  if(btn){ btn.disabled = true; }
+  // Re-verify the current password against Supabase itself (a real sign-in
+  // check) before allowing the change — never compared against a locally
+  // stored copy, since the app never holds your password in memory.
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const { error: reauthError } = await supabaseClient.auth.signInWithPassword({ email: user.email, password: current });
+  if(reauthError){
+    if(btn){ btn.disabled = false; }
+    errEl.textContent = 'Current password is incorrect.';
+    return;
+  }
+  const { error } = await supabaseClient.auth.updateUser({ password: next });
+  if(btn){ btn.disabled = false; }
+  if(error){
+    errEl.textContent = error.message || 'Could not update your password.';
+    return;
+  }
+  closeModal();
+  alert('Your password has been changed.');
+}
+
+/* ---------------- DELETE ACCOUNT (requires password; wipes notes, voice
+   memos, and profile, then signs out) ---------------- */
+function openDeleteAccount(){
+  $('delete-account-password').value = '';
+  $('delete-account-error').textContent = '';
+  openModal('modal-delete-account');
+}
+async function confirmDeleteAccountAction(){
+  const errEl = $('delete-account-error');
+  errEl.textContent = '';
+  if(!supabaseClient){ errEl.textContent = checkSupabaseReady() || 'Not connected.'; return; }
+  const pw = $('delete-account-password').value;
+  const btn = $('confirm-delete-account-btn');
+  if(btn){ btn.disabled = true; }
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const { error: reauthError } = await supabaseClient.auth.signInWithPassword({ email: user.email, password: pw });
+  if(reauthError){
+    if(btn){ btn.disabled = false; }
+    errEl.textContent = 'Incorrect password.';
+    return;
+  }
+  // Remove voice memo audio files first — these live in Storage and aren't
+  // automatically cleaned up when a note row is deleted.
+  const voicePaths = [];
+  state.notes.forEach(n => (n.voices||[]).forEach(v => { if(v.path) voicePaths.push(v.path); }));
+  if(voicePaths.length){
+    try{ await supabaseClient.storage.from('voice-memos').remove(voicePaths); }
+    catch(err){ console.error('Could not remove some voice memo files', err); }
+  }
+  // Delete your notes and profile row — RLS guarantees these calls can only
+  // ever touch rows that belong to you.
+  try{ await supabaseClient.from('notes').delete().eq('user_id', user.id); }
+  catch(err){ console.error('Could not delete notes', err); }
+  try{ await supabaseClient.from('profiles').delete().eq('id', user.id); }
+  catch(err){ console.error('Could not delete profile', err); }
+  // Best-effort: fully remove the login itself too, if the optional
+  // "delete-account" Edge Function has been deployed (see README) — the
+  // anon key alone can never delete a login on its own, only that function
+  // can. Safe to skip silently if it isn't set up yet; your data is already gone.
+  try{ await supabaseClient.functions.invoke('delete-account'); }
+  catch(err){ console.error('Login removal skipped (optional Edge Function not deployed)', err); }
+  try{ await supabaseClient.auth.signOut(); }catch(err){}
+  if(btn){ btn.disabled = false; }
+  closeModal();
+  state.loggedIn = false;
+  state.notes = [];
+  state.activeNoteId = null;
+  $('app-shell').classList.add('hidden');
+  $('auth-screen').classList.remove('hidden');
+  closeUserMenu();
+  alert("Your data has been deleted and you've been signed out.");
+}
+
+/* ---------------- LOCKING (always required on open) ---------------- */
+function openNote(id){
+  const n = state.notes.find(x=>x.id===id);
+  if(n.locked){
+    state.pendingUnlockId = id;
+    $('lock-title').textContent = 'Enter password';
+    $('lock-desc').textContent = `"${n.title||'Untitled'}" is locked.`;
+    $('lock-confirm-btn').textContent = 'Unlock';
+    $('lock-confirm-btn').onclick = confirmUnlock;
+    $('lock-password').value=''; $('lock-error').textContent='';
+    openModal('modal-lock');
+    return;
+  }
+  state.activeNoteId = id;
+  navigate('editor');
+  renderEditor(id);
+}
+function confirmUnlock(){
+  const n = state.notes.find(x=>x.id===state.pendingUnlockId);
+  if($('lock-password').value === n.password){
+    closeModal();
+    state.activeNoteId = n.id;
+    navigate('editor');
+    renderEditor(n.id);
+  } else {
+    $('lock-error').textContent = 'Incorrect password. Try again.';
+  }
+}
+function onLockClick(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(n.locked){
+    if(confirm('Remove password lock from this note?')){
+      n.locked=false; n.password=null; scheduleNoteSync(n); updateLockButton(n);
+    }
+  } else {
+    $('lock-title').textContent='Lock this note';
+    $('lock-desc').textContent='Set a password. You will need it every time you reopen this note.';
+    $('lock-confirm-btn').textContent='Lock note';
+    $('lock-confirm-btn').onclick = confirmLock;
+    $('lock-password').value=''; $('lock-error').textContent='';
+    openModal('modal-lock');
+  }
+}
+function confirmLock(){
+  const pw = $('lock-password').value;
+  if(!pw){ $('lock-error').textContent='Enter a password.'; return; }
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  n.locked = true; n.password = pw;
+  scheduleNoteSync(n);
+  closeModal();
+  updateLockButton(n);
+}
+function updateLockButton(n){
+  $('btn-lock').style.color = n.locked ? 'var(--accent)' : 'var(--text)';
+  renderNotesList();
+}
+
+/* ---------------- EDITOR ---------------- */
+function fillSelect(sel, values, current){
+  sel.innerHTML = values.map(v=>`<option ${v===current?'selected':''}>${v}</option>`).join('');
+}
+function fillSelectWithAdd(sel, values, current){
+  let html = values.map(v=>`<option ${v===current?'selected':''}>${escapeHtml(v)}</option>`).join('');
+  html += `<option value="__add_new__">+ Add new…</option>`;
+  sel.innerHTML = html;
+}
+function onTopicSelectChange(){
+  const sel = $('editor-topic');
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(sel.value === '__add_new__'){
+    const val = (prompt('New topic name:')||'').trim();
+    if(val){
+      if(!TOPICS.includes(val)){ TOPICS.push(val); TOPIC_COLOR[val] = nextTopicColor(); scheduleProfileSync(); }
+      fillSelectWithAdd(sel, TOPICS, val);
+    } else {
+      fillSelectWithAdd(sel, TOPICS, n.topic);
+      return;
+    }
+  }
+  onEditorChange();
+}
+function onActivitySelectChange(){
+  const sel = $('editor-activity');
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(sel.value === '__add_new__'){
+    const val = (prompt('New activity name:')||'').trim();
+    if(val){
+      if(!ACTIVITIES.includes(val)){ ACTIVITIES.push(val); scheduleProfileSync(); }
+      fillSelectWithAdd(sel, ACTIVITIES, val);
+    } else {
+      fillSelectWithAdd(sel, ACTIVITIES, n.activity);
+      return;
+    }
+  }
+  onEditorChange();
+}
+function renderEditor(id){
+  const n = state.notes.find(x=>x.id===id);
+  $('editor-title').value = n.title;
+  $('note-content').innerHTML = n.content;
+  fillSelect($('editor-folder'), state.folders, n.folder);
+  fillSelect($('editor-mood'), MOODS, n.mood);
+  fillSelectWithAdd($('editor-topic'), TOPICS, n.topic);
+  fillSelectWithAdd($('editor-activity'), ACTIVITIES, n.activity);
+  $('editor-date').textContent = fmtDate(n.date);
+  $('note-content').style.fontSize = n.fontSize ? n.fontSize + 'pt' : '';
+  $('font-size-input').value = n.fontSize || 12;
+  updateLockButton(n);
+  renderVoiceMemos(n);
+  $('voice-recording-bar').classList.add('hidden');
+  renderAiHint(n);
+  const f = $('save-flag');
+  f.style.color = 'var(--text-muted)';
+  f.textContent = state.autosave ? 'All changes saved' : 'No unsaved changes';
+}
+function commitEditorFieldsToNote(n){
+  n.title = $('editor-title').value;
+  n.content = $('note-content').innerHTML;
+  n.folder = $('editor-folder').value;
+  n.mood = $('editor-mood').value;
+  n.topic = $('editor-topic').value;
+  n.activity = $('editor-activity').value;
+  const fs = $('note-content').style.fontSize;
+  n.fontSize = fs ? parseInt(fs, 10) : null;
+}
+function markUnsaved(){
+  const f = $('save-flag'); if(!f) return;
+  f.textContent = 'Unsaved changes — click Save note';
+  f.style.color = 'var(--danger)';
+}
+function onEditorChange(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  if(state.autosave){
+    commitEditorFieldsToNote(n);
+    scheduleNoteSync(n);
+    renderSidebar();
+    flashSave();
+  } else {
+    markUnsaved();
+  }
+}
+function saveNote(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  commitEditorFieldsToNote(n);
+  scheduleNoteSync(n);
+  renderSidebar();
+  const f = $('save-flag');
+  f.style.color = 'var(--accent)';
+  f.textContent = 'Note saved';
+  clearTimeout(saveNote._t);
+  saveNote._t = setTimeout(()=>{
+    if(!f) return;
+    f.style.color = 'var(--text-muted)';
+    f.textContent = state.autosave ? 'All changes saved' : 'No unsaved changes';
+  }, 1600);
+}
+function fmt(cmd, val){ document.execCommand(cmd, false, val||null); $('note-content').focus(); onEditorChange(); }
+function applyFont(val){ document.execCommand('fontName', false, val); onEditorChange(); }
+
+/* -- Google Docs style numeric font size -- */
+// Clicking into the number input (or its +/- buttons) moves keyboard focus off
+// #note-content, and in most browsers that clears window.getSelection() entirely —
+// so by the time applyFontSize() ran, any letters the user had highlighted were
+// already lost and the size got applied to the whole note instead of just the
+// selected text. To fix that, we continuously shadow the last *real* (non-collapsed)
+// selection made inside the editor, and fall back to it if the live selection has
+// been cleared by the time a size change actually fires.
+let savedNoteRange = null;
+function captureNoteSelectionIfValid(){
+  const editor = $('note-content');
+  if(!editor) return;
+  const sel = window.getSelection();
+  if(!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  if(editor.contains(sel.anchorNode) && editor.contains(sel.focusNode)){
+    savedNoteRange = sel.getRangeAt(0).cloneRange();
+  }
+}
+document.addEventListener('selectionchange', captureNoteSelectionIfValid);
+
+function stepFontSize(delta){
+  const input = $('font-size-input');
+  let v = parseInt(input.value||'12',10) + delta;
+  v = Math.max(6, Math.min(96, v));
+  input.value = v;
+  applyFontSize(v);
+}
+function applyFontSize(pt){
+  pt = Math.max(6, Math.min(96, parseInt(pt,10) || 12));
+  $('font-size-input').value = pt;
+  const editor = $('note-content');
+  const sel = window.getSelection();
+  const liveSelectionValid = sel && sel.rangeCount > 0 && !sel.isCollapsed
+    && editor.contains(sel.anchorNode) && editor.contains(sel.focusNode);
+
+  let range = null;
+  if(liveSelectionValid){
+    range = sel.getRangeAt(0);
+  } else if(savedNoteRange && !savedNoteRange.collapsed
+      && editor.contains(savedNoteRange.startContainer) && editor.contains(savedNoteRange.endContainer)){
+    // The live selection is gone (focus moved to the size control), but we captured
+    // the highlighted text right before that happened — use it instead.
+    range = savedNoteRange;
+  }
+
+  if(!range){
+    // Never had a selection at all: treat this as "the whole note's font size" instead
+    // of using execCommand('fontSize'), which (with a collapsed selection) used to wrap
+    // large, inconsistent chunks of the note in legacy <font> tags and threw off the layout.
+    editor.style.fontSize = pt + 'pt';
+    savedNoteRange = null;
+    onEditorChange();
+    return;
+  }
+
+  // A specific range is selected: wrap just that range in a plain <span>, using the
+  // DOM Range API directly instead of execCommand (which is the safer, more predictable
+  // way to change font size for a selection without disturbing surrounding content).
+  const span = document.createElement('span');
+  span.style.fontSize = pt + 'pt';
+  try{
+    range.surroundContents(span);
+  }catch(err){
+    const frag = range.extractContents();
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
+  editor.focus();
+  const newSel = window.getSelection();
+  newSel.removeAllRanges();
+  const newRange = document.createRange();
+  newRange.selectNodeContents(span);
+  newSel.addRange(newRange);
+  savedNoteRange = null;
+  onEditorChange();
+}
+
+/* -- Custom font import -- */
+function importFont(e){
+  const file = e.target.files[0]; if(!file) return;
+  const familyName = 'Custom-' + file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g,'');
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const fontFace = new FontFace(familyName, reader.result);
+      fontFace.load().then(loaded=>{
+        document.fonts.add(loaded);
+        const sel = $('font-family-select');
+        const opt = document.createElement('option');
+        opt.value = `'${familyName}'`;
+        opt.textContent = file.name.replace(/\.[^.]+$/,'');
+        sel.appendChild(opt);
+        sel.value = opt.value;
+        applyFont(opt.value);
+      }).catch(()=>{ alert('Could not load that font file.'); });
+    }catch(err){ alert('Could not load that font file.'); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value='';
+}
+
+function insertImage(e){
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{ document.execCommand('insertImage', false, reader.result); onEditorChange(); };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function renderAiHint(n){
+  const box = $('ai-hint-box');
+  $('btn-ai').style.opacity = state.aiEnabled ? '1' : '.4';
+  if(!state.aiEnabled){ box.innerHTML=''; return; }
+  const wordCount = stripHtml(n.content).split(/\s+/).filter(Boolean).length;
+  box.innerHTML = `<div class="ai-hint">✦ AI suggestion: this reads as <b>${n.mood}</b>. Similar in tone to "${pickSimilar(n)}". ${wordCount>0?`(${wordCount} words)`:''}</div>`;
+}
+function pickSimilar(n){
+  const similar = state.notes.filter(x=>x.id!==n.id && x.topic===n.topic);
+  return similar.length ? similar[0].title||'an earlier note' : 'nothing yet';
+}
+
+/* ---------------- VOICE MEMOS (multiple, named, per note — real audio) ----------------
+   Recorded with MediaRecorder (needs mic permission + HTTPS), uploaded to a private
+   Supabase Storage bucket under <your-user-id>/<note-id>/<voice-id>.<ext>, and played
+   back via short-lived signed URLs (the bucket isn't public). Recorded blobs are kept
+   in memory only long enough to upload — if you reload mid-upload, the recording is
+   lost and you'd need to record again. */
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedMimeType = '';
+const pendingVoiceBlobs = {}; // voiceId -> Blob, kept only until upload succeeds (retry support)
+
+function extForMime(mime){
+  if(mime && mime.includes('mp4')) return 'm4a';
+  if(mime && mime.includes('ogg')) return 'ogg';
+  return 'webm';
+}
+async function toggleVoiceRecord(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  if(!state.recording){
+    if(!navigator.mediaDevices || !window.MediaRecorder){
+      alert("Voice recording isn't supported in this browser.");
+      return;
+    }
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }catch(err){
+      alert("Could not access your microphone. Check this site's microphone permission in your browser and try again.");
+      return;
+    }
+    recordedChunks = [];
+    recordedMimeType = ['audio/webm','audio/mp4','audio/ogg'].find(t => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+    mediaRecorder = recordedMimeType ? new MediaRecorder(stream, { mimeType: recordedMimeType }) : new MediaRecorder(stream);
+    mediaRecorder.addEventListener('dataavailable', (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); });
+    mediaRecorder.start();
+    state.recording = true; state.recordSeconds = 0;
+    $('voice-recording-bar').classList.remove('hidden');
+    $('record-timer').textContent='0:00';
+    state.recordTimer = setInterval(()=>{
+      state.recordSeconds++;
+      const m = Math.floor(state.recordSeconds/60), s=state.recordSeconds%60;
+      $('record-timer').textContent = m+':'+String(s).padStart(2,'0');
+    },1000);
+  } else {
+    state.recording = false;
+    clearInterval(state.recordTimer);
+    $('voice-recording-bar').classList.add('hidden');
+    const duration = Math.max(state.recordSeconds, 1);
+    const rec = mediaRecorder;
+    const finalize = async () => {
+      rec.stream.getTracks().forEach(t=>t.stop());
+      const blob = new Blob(recordedChunks, { type: recordedMimeType || 'audio/webm' });
+      await saveVoiceMemo(n, blob, duration);
+    };
+    if(rec.state !== 'inactive'){
+      rec.addEventListener('stop', finalize, { once:true });
+      rec.stop();
+    } else {
+      finalize();
+    }
+  }
+}
+async function saveVoiceMemo(n, blob, duration){
+  const voiceId = crypto.randomUUID();
+  n.voices = n.voices || [];
+  const entry = { id: voiceId, name: 'Voice memo ' + (n.voices.length + 1), duration, path: null, uploading: true, uploadFailed: false };
+  n.voices.push(entry);
+  pendingVoiceBlobs[voiceId] = blob;
+  renderVoiceMemos(n);
+  await uploadVoiceMemo(n, entry);
+}
+async function uploadVoiceMemo(n, entry){
+  const blob = pendingVoiceBlobs[entry.id];
+  entry.uploading = true; entry.uploadFailed = false;
+  renderVoiceMemos(n);
+  if(!supabaseClient || !blob){
+    entry.uploading = false; entry.uploadFailed = true;
+    renderVoiceMemos(n);
+    return;
+  }
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if(!user){ entry.uploading = false; entry.uploadFailed = true; renderVoiceMemos(n); return; }
+  const ext = extForMime(blob.type);
+  const path = `${user.id}/${n.id}/${entry.id}.${ext}`;
+  const { error } = await supabaseClient.storage.from('voice-memos').upload(path, blob, { contentType: blob.type || 'audio/webm', upsert: true });
+  if(error){
+    console.error('Could not upload voice memo', error);
+    entry.uploading = false; entry.uploadFailed = true;
+  } else {
+    entry.path = path; entry.uploading = false; entry.uploadFailed = false;
+    delete pendingVoiceBlobs[entry.id];
+    scheduleNoteSync(n);
+  }
+  renderVoiceMemos(n);
+}
+function retryVoiceUpload(noteId, voiceId){
+  const n = state.notes.find(x=>x.id===noteId);
+  const entry = n && (n.voices||[]).find(v=>v.id===voiceId);
+  if(!n || !entry) return;
+  if(!pendingVoiceBlobs[voiceId]){
+    alert("That recording is gone from memory (probably from a page reload) — you'll need to record it again.");
+    return;
+  }
+  uploadVoiceMemo(n, entry);
+}
+async function playVoiceMemo(v, btn){
+  if(v._audio && !v._audio.paused){ v._audio.pause(); btn.textContent='▶'; return; }
+  if(v._audio){ v._audio.play(); btn.textContent='⏸'; return; }
+  if(!v.path || !supabaseClient){ alert('No saved recording to play yet.'); return; }
+  const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent='…';
+  const { data, error } = await supabaseClient.storage.from('voice-memos').createSignedUrl(v.path, 3600);
+  btn.disabled = false;
+  if(error || !data){ console.error('Could not create signed URL', error); alert('Could not load this recording.'); btn.textContent = originalLabel; return; }
+  const audio = new Audio(data.signedUrl);
+  v._audio = audio;
+  audio.addEventListener('ended', ()=>{ btn.textContent='▶'; });
+  audio.play();
+  btn.textContent = '⏸';
+}
+function renderVoiceMemos(n){
+  const wrap = $('voice-memos'); wrap.innerHTML='';
+  (n.voices||[]).forEach(v=>{
+    const row = document.createElement('div');
+    row.className='voice-strip';
+    row.style.marginTop='10px';
+
+    const playBtn = document.createElement('button');
+    playBtn.className='icon';
+    if(v.uploading){
+      playBtn.title='Uploading…'; playBtn.textContent='…'; playBtn.disabled=true;
+    } else if(v.uploadFailed){
+      playBtn.title='Upload failed'; playBtn.textContent='!'; playBtn.disabled=true;
+    } else {
+      playBtn.title='Play';
+      playBtn.textContent='▶';
+      playBtn.onclick = ()=>playVoiceMemo(v, playBtn);
+    }
+
+    const nameInput = document.createElement('input');
+    nameInput.type='text'; nameInput.value=v.name;
+    nameInput.title='Rename this voice memo';
+    nameInput.style.cssText='width:150px;flex:0 0 150px;background:transparent;border:1px solid transparent;font-weight:600;padding:4px 6px;';
+    nameInput.onfocus = ()=>{ nameInput.style.borderColor='var(--border)'; };
+    nameInput.onblur = ()=>{ nameInput.style.borderColor='transparent'; };
+    nameInput.onchange = ()=>{ v.name = nameInput.value.trim() || v.name; nameInput.value=v.name; scheduleNoteSync(n); };
+
+    const wf = document.createElement('div'); wf.className='waveform';
+    for(let i=0;i<18;i++){ const bar=document.createElement('span'); bar.style.height=(6+Math.round(Math.sin(i*1.3+v.duration)*6+8))+'px'; wf.appendChild(bar); }
+
+    const dur = document.createElement('span');
+    dur.style.cssText='font-size:11px;color:var(--text-muted);flex-shrink:0;';
+    dur.textContent = Math.floor(v.duration/60)+':'+String(v.duration%60).padStart(2,'0');
+
+    row.appendChild(playBtn); row.appendChild(nameInput); row.appendChild(wf); row.appendChild(dur);
+
+    if(v.uploading){
+      const status = document.createElement('span');
+      status.style.cssText='font-size:11px;color:var(--text-muted);flex-shrink:0;';
+      status.textContent = 'Uploading…';
+      row.appendChild(status);
+    } else if(v.uploadFailed){
+      const retryBtn = document.createElement('button');
+      retryBtn.className='ghost'; retryBtn.style.color='var(--danger)';
+      retryBtn.textContent='Upload failed — Retry';
+      retryBtn.onclick = ()=>retryVoiceUpload(n.id, v.id);
+      row.appendChild(retryBtn);
+    }
+
+    const delBtn = document.createElement('button');
+    delBtn.className='ghost'; delBtn.textContent='Remove';
+    delBtn.onclick = ()=>removeVoice(v.id);
+    row.appendChild(delBtn);
+
+    wrap.appendChild(row);
+  });
+}
+async function removeVoice(id){
+  if(!confirm('Remove this voice memo?')) return;
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  const v = (n.voices||[]).find(x=>x.id===id);
+  n.voices = (n.voices||[]).filter(x=>x.id!==id);
+  delete pendingVoiceBlobs[id];
+  scheduleNoteSync(n);
+  renderEditor(n.id);
+  if(v && v.path && supabaseClient){
+    const { error } = await supabaseClient.storage.from('voice-memos').remove([v.path]);
+    if(error) console.error('Could not delete this recording from storage', error);
+  }
+}
+
+/* ---------------- SHARE (real, public link — view or edit) ----------------
+   Sharing works via a random per-note token (not the note's real id) so a
+   link can be revoked/regenerated independently, and so a shared note
+   never reveals its underlying database id. The sender picks "Can view" or
+   "Can edit" here; the public page that reads this token back never uses
+   your login — see get_shared_note()/update_shared_note() in schema.sql
+   and showSharedNote() below. Editing is last-save-wins (no live/realtime
+   co-editing), which is enough for "send someone a link, they make
+   changes, you see them next time you open it." */
+function openShare(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  $('share-error').textContent = '';
+  $('share-note-title').textContent = n.title||'Untitled';
+  if(n.locked){
+    $('share-link').value = '';
+    $('share-error').textContent = "Locked notes can't be shared — unlock it first.";
+    $('unshare-btn').classList.add('hidden');
+    openModal('modal-share');
+    return;
+  }
+  if(!n.shareToken){
+    n.shareToken = crypto.randomUUID();
+    if(!n.sharePermission) n.sharePermission = 'view';
+    scheduleNoteSync(n);
+  }
+  $('unshare-btn').classList.remove('hidden');
+  $('share-permission').value = n.sharePermission || 'view';
+  $('share-perm-word').textContent = (n.sharePermission === 'edit') ? 'edit' : 'view';
+  $('share-link').value = `${window.location.origin}/n/${n.shareToken}`;
+  openModal('modal-share');
+}
+function setSharePermission(value){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  n.sharePermission = (value === 'edit') ? 'edit' : 'view';
+  scheduleNoteSync(n);
+  $('share-perm-word').textContent = n.sharePermission === 'edit' ? 'edit' : 'view';
+}
+function copyShareLink(){
+  const input = $('share-link');
+  if(!input.value) return;
+  input.select();
+  if(navigator.clipboard) navigator.clipboard.writeText(input.value).catch(()=>{});
+  else document.execCommand('copy');
+}
+function stopSharingNote(){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
+  n.shareToken = null;
+  scheduleNoteSync(n);
+  closeModal();
+}
+
+/* ---------------- SHARED NOTE (public view/edit, no login required) ----------------
+   Reached at yoursite.com/n/<token>. Runs instead of the normal
+   auth/app-shell flow — see boot() at the very bottom of this script. */
+let currentSharedToken = null;
+async function showSharedNote(token){
+  currentSharedToken = token;
+  $('auth-screen').classList.add('hidden');
+  $('app-shell').classList.add('hidden');
+  $('shared-note-view').classList.remove('hidden');
+  const body = $('shared-note-content');
+  body.innerHTML = '<div class="sub">Loading note…</div>';
+  if(!supabaseClient){
+    body.innerHTML = `<div class="modal-error">${escapeHtml(checkSupabaseReady() || 'Not connected.')}</div>`;
+    return;
+  }
+  try{
+    const { data, error } = await supabaseClient.rpc('get_shared_note', { p_token: token });
+    const row = Array.isArray(data) ? data[0] : data;
+    if(error || !row){
+      body.innerHTML = `
+        <div class="brand" style="margin-bottom:24px;"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+        <h2 style="margin:0 0 8px;">This link isn't available</h2>
+        <div class="sub">The note may have been unshared, deleted, locked, or the link is incorrect.</div>`;
+      return;
+    }
+    const metaBits = [row.date, row.mood, row.topic].filter(Boolean).map(escapeHtml).join(' &middot; ');
+    const tags = (row.tags||[]).map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join(' ');
+    if(row.share_permission === 'edit'){
+      body.innerHTML = `
+        <div class="brand" style="margin-bottom:24px;"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+        <div class="sub" style="margin-bottom:4px;">${metaBits}${metaBits ? ' &middot; ' : ''}Shared, editable by anyone with this link</div>
+        <input type="text" id="shared-edit-title" style="font-size:22px;font-weight:600;border:none;padding:4px 0;margin-bottom:10px;width:100%;background:transparent;color:var(--text);">
+        ${tags ? `<div style="margin-bottom:14px;">${tags}</div>` : ''}
+        <div id="shared-edit-content" contenteditable="true" style="min-height:220px;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface);color:var(--text);"></div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;gap:12px;">
+          <button class="primary" onclick="saveSharedEdit()">Save changes</button>
+          <span class="sub" id="shared-save-status"></span>
+        </div>
+        <div class="sub" style="margin-top:28px;">Shared from Mind Archive — anyone with this link can edit; changes save for everyone who has it.</div>`;
+      $('shared-edit-title').value = row.title || '';
+      $('shared-edit-content').innerHTML = sanitizeSharedHtml(row.content || '');
+    } else {
+      body.innerHTML = `
+        <div class="brand" style="margin-bottom:24px;"><div class="brand-mark">M</div><div class="brand-name">Mind Archive</div></div>
+        <div class="sub" style="margin-bottom:4px;">${metaBits}</div>
+        <h1 style="margin:0 0 14px;">${escapeHtml(row.title || 'Untitled')}</h1>
+        ${tags ? `<div style="margin-bottom:18px;">${tags}</div>` : ''}
+        <div style="line-height:1.6;">${sanitizeSharedHtml(row.content||'')}</div>
+        <div class="sub" style="margin-top:36px;">Shared read-only from Mind Archive. Nothing here can be edited.</div>`;
+    }
+  }catch(err){
+    console.error('Could not load shared note', err);
+    body.innerHTML = '<div class="modal-error">Something went wrong loading this note.</div>';
+  }
+}
+async function saveSharedEdit(){
+  const statusEl = $('shared-save-status');
+  if(!currentSharedToken || !supabaseClient){ if(statusEl) statusEl.textContent = 'Not connected.'; return; }
+  const title = $('shared-edit-title').value;
+  const content = $('shared-edit-content').innerHTML;
+  if(statusEl) statusEl.textContent = 'Saving…';
+  try{
+    const { data, error } = await supabaseClient.rpc('update_shared_note', { p_token: currentSharedToken, p_title: title, p_content: content });
+    if(error || !data){
+      if(statusEl) statusEl.textContent = 'Could not save — this link may have been revoked or switched to view-only.';
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Saved.';
+  }catch(err){
+    console.error('Could not save shared edit', err);
+    if(statusEl) statusEl.textContent = 'Something went wrong saving.';
+  }
+}
+// The note body is stored as HTML from a rich-text editor (bold, lists,
+// images, etc.) so it's rendered as HTML here too, not escaped as plain
+// text. This strips script tags and inline event handlers first as a
+// safety net before showing it to a logged-out visitor.
+function sanitizeSharedHtml(html){
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<(iframe|object|embed|style)[\s\S]*?<\/\1>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s(href|src)\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, '');
+}
+function openModal(id){ $('overlay').classList.remove('hidden'); document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden')); $(id).classList.remove('hidden'); }
+function closeModal(){ $('overlay').classList.add('hidden'); }
+
+/* ---------------- TIMELINE ---------------- */
+function renderTimeline(){
+  renderFilterChips('filter-row-timeline', renderTimeline);
+  const list = filteredNotes(state.notes.slice()).sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const wrap = $('timeline-list'); wrap.innerHTML='';
+  let lastMonth=null;
+  if(list.length===0){ wrap.innerHTML = '<div class="empty-state">No notes match these filters.</div>'; return; }
+  list.forEach(n=>{
+    const mk = monthKey(n.date);
+    if(mk!==lastMonth){
+      const h = document.createElement('div'); h.className='tl-month'; h.textContent=mk; h.dataset.month=mk;
+      wrap.appendChild(h); lastMonth=mk;
+    }
+    const item = document.createElement('div'); item.className='tl-item';
+    item.onclick = ()=>openNote(n.id);
+    item.innerHTML = `
+      <div class="tl-item-top"><h4>${n.locked?'&#128274; ':''}${escapeHtml(n.title)||'Untitled'}</h4><span class="tl-date">${fmtDate(n.date)}</span></div>
+      <div class="tl-snip">${n.locked?'This note is locked.':escapeHtml(stripHtml(n.content)).slice(0,140)}</div>
+      <div class="tl-tags"><span class="pill">${MOOD_ICON[n.mood]||''} ${n.mood}</span><span class="pill">${n.topic}</span>${n.activity!=='None'?`<span class="pill">${n.activity}</span>`:''}</div>`;
+    wrap.appendChild(item);
+  });
+}
+function jumpTimeline(range){
+  const now = new Date();
+  let target = new Date(now);
+  if(range==='week') target.setDate(now.getDate()-7);
+  if(range==='month') target.setMonth(now.getMonth()-1);
+  if(range==='year') target.setFullYear(now.getFullYear()-1);
+  const targetKey = monthKey(target.toISOString());
+  const headers = Array.from(document.querySelectorAll('.tl-month'));
+  let el = headers.find(h=>h.dataset.month===targetKey);
+  if(!el && headers.length){
+    let best=null, bestDiff=Infinity;
+    headers.forEach(h=>{
+      const parsed = new Date(h.dataset.month.replace(/^(\w+) (\d+)$/, '1 $1 $2'));
+      const diff = Math.abs(parsed - target);
+      if(diff < bestDiff){ bestDiff = diff; best = h; }
+    });
+    el = best;
+  }
+  if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+/* ---------------- MIND MAP ---------------- */
+/* Clean by default: only the center "You" node and topic nodes are always shown.
+   A topic's individual notes only appear ("pop out") when that topic is clicked,
+   so the map never shows more than one cluster of notes at a time. */
+function mindMapTopicPosition(ti, count, cx, cy, ringTopic){
+  const angle = -Math.PI/2 + (ti/count)*2*Math.PI;
+  return { angle, x: cx + ringTopic*Math.cos(angle), y: cy + ringTopic*Math.sin(angle) };
+}
+// Connector lines were drawn straight from circle CENTER to circle CENTER, so the
+// first/last several pixels of every line were painted inside (and, depending on
+// draw order, sometimes on top of) the node circles at each end — visually looking
+// like the lines cut into the nodes. This trims a point back along the line so it
+// stops right at a circle's edge instead of its center.
+function mmEdgePoint(fromX, fromY, toX, toY, r){
+  const dx = toX-fromX, dy = toY-fromY;
+  const dist = Math.hypot(dx,dy) || 1;
+  return { x: fromX + (dx/dist)*r, y: fromY + (dy/dist)*r };
+}
+// The map's node coordinates live in a fixed "world" space. mindMapPan holds the
+// currently-visible viewBox window into that world (x/y/w/h) so panning, and a
+// zoomed-in default framing on small screens, can persist across re-renders
+// (e.g. opening/closing a topic) instead of resetting the view every time.
+let mindMapPan = null;
+function recenterMindMap(){
+  mindMapPan = null;
+  renderMindMap();
+}
+function renderMindMap(){
+  renderMindMapTopicsManager();
+  const svg = $('mindmap-svg');
+  const width=780, height=580;
+  const cx=width/2, cy=height/2+10;
+  // Topics come from the master TOPICS list (managed via the chips above the map),
+  // not just whatever's currently in use on a note — so a newly-added topic shows
+  // up as its own node right away, even before any note is assigned to it. Any
+  // legacy topic value that only exists on a note (not in TOPICS) still gets shown
+  // defensively so nothing silently disappears.
+  const topics = [...new Set([...TOPICS, ...state.notes.map(n=>n.topic)])];
+  const centerR=24, topicR=16, noteR=9;
+  const ringTopic = 160;
+  const burstR = 118;
+  let parts = [];
+
+  const btnListMode = $('btn-mm-list-mode');
+  if(btnListMode){
+    btnListMode.textContent = (state.mindMapListMode ? '☑' : '☐') + ' List mode: ' + (state.mindMapListMode ? 'On' : 'Off');
+    btnListMode.classList.toggle('primary', state.mindMapListMode);
+    btnListMode.classList.toggle('ghost', !state.mindMapListMode);
+  }
+
+  const isSmallScreen = window.matchMedia && window.matchMedia('(max-width:860px)').matches;
+  const viewW = isSmallScreen ? 460 : width;
+  const viewH = isSmallScreen ? 460 : height;
+  if(!mindMapPan || mindMapPan.w !== viewW || mindMapPan.h !== viewH){
+    // First render, or the screen crossed the mobile/desktop breakpoint: reset to a
+    // sensible default centered on the "You" hub.
+    mindMapPan = { x: cx - viewW/2, y: cy - viewH/2, w: viewW, h: viewH };
+  }
+  svg.setAttribute('viewBox', `${mindMapPan.x} ${mindMapPan.y} ${mindMapPan.w} ${mindMapPan.h}`);
+
+  // background rect: clicking empty space (without dragging) collapses the open cluster
+  parts.push(`<rect x="-2000" y="-2000" width="4000" height="4000" fill="transparent" class="mm-background"></rect>`);
+  parts.push(`<circle cx="${cx}" cy="${cy}" r="${centerR}" class="mm-center"></circle>`);
+  parts.push(`<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="12" class="mm-on-color" font-weight="600">You</text>`);
+
+  if(topics.length===0){
+    parts.push(`<text x="${cx}" y="${cy+50}" text-anchor="middle" font-size="12" class="mm-label-muted">No topics yet — add one above to get started.</text>`);
+    svg.innerHTML = parts.join('');
+    $('mm-legend').innerHTML = '';
+    $('mm-list-panel').classList.add('hidden');
+    initMindMapPan();
+    return;
+  }
+
+  // Always-visible layer: center-to-topic spokes and topic nodes
+  const topicPositions = {};
+  topics.forEach((topic, ti)=>{
+    const pos = mindMapTopicPosition(ti, topics.length, cx, cy, ringTopic);
+    topicPositions[topic] = pos;
+    const color = TOPIC_COLOR[topic] || '#8a8a86';
+    const isOpen = state.mindMapExpandedTopic === topic;
+    const spokeStart = mmEdgePoint(cx, cy, pos.x, pos.y, centerR);
+    const spokeEnd = mmEdgePoint(pos.x, pos.y, cx, cy, topicR);
+    parts.push(`<line x1="${spokeStart.x}" y1="${spokeStart.y}" x2="${spokeEnd.x}" y2="${spokeEnd.y}" stroke="#c9c6ba" stroke-width="1.5"></line>`);
+    const count = state.notes.filter(n=>n.topic===topic).length;
+    parts.push(`<g class="mm-topic" data-topic="${escapeHtml(topic)}" tabindex="0" role="button" aria-label="${isOpen?'Hide':'Show'} notes for ${escapeHtml(topic)}">
+      <circle cx="${pos.x}" cy="${pos.y}" r="${topicR}" fill="${color}" stroke="${isOpen?'#26251f':'transparent'}" stroke-width="2"></circle>
+      <text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="11" class="mm-on-color" font-weight="600">${escapeHtml(topic[0])}</text>
+      <title>${escapeHtml(topic)} (${count} note${count===1?'':'s'}) — click to ${isOpen?'hide':'show'}</title>
+    </g>`);
+    const labelAnchor = Math.cos(pos.angle) > 0.3 ? 'start' : (Math.cos(pos.angle) < -0.3 ? 'end' : 'middle');
+    parts.push(`<text x="${pos.x}" y="${pos.y+topicR+18}" text-anchor="${labelAnchor}" font-size="11" class="mm-label" font-weight="${isOpen?'600':'400'}">${escapeHtml(topic)}</text>`);
+  });
+
+  // Expandable layer: notes for the one currently-open topic, bursting out around it.
+  // Only rendered in graph mode — in list mode the same click instead opens a plain
+  // HTML list (see renderMindMapNoteList), so there's nothing here for lines/labels
+  // to collide with in the first place.
+  if(!state.mindMapListMode && state.mindMapExpandedTopic && topics.includes(state.mindMapExpandedTopic)){
+    const topic = state.mindMapExpandedTopic;
+    const pos = topicPositions[topic];
+    const color = TOPIC_COLOR[topic] || '#8a8a86';
+    const notes = state.notes.filter(n=>n.topic===topic);
+    // Spread almost all the way around (not squeezed into a narrow arc), with a
+    // minimum step enforced regardless of note count so labels never compress past
+    // a readable gap, and three staggered ring radii so angularly-close notes still
+    // land at different distances from the topic.
+    const spread = Math.min(6.0, 1.8 + notes.length*0.42);
+    const step = notes.length>1 ? Math.max(0.34, spread/(notes.length-1)) : 0;
+    const ringGap = 64;
+
+    notes.forEach((n, ni)=>{
+      const na = pos.angle + (ni-(notes.length-1)/2)*step;
+      const r = burstR + (ni % 3) * ringGap;
+      const nx = pos.x + r*Math.cos(na), ny = pos.y + r*Math.sin(na);
+      const anchor = Math.cos(na) > 0.25 ? 'start' : (Math.cos(na) < -0.25 ? 'end' : 'middle');
+      const dx = Math.cos(na) > 0.25 ? (noteR+7) : (Math.cos(na) < -0.25 ? -(noteR+7) : 0);
+      const rawTitle = n.title || 'Untitled';
+      const label = escapeHtml(rawTitle.length > 16 ? rawTitle.slice(0,16) + '…' : rawTitle);
+      const burstStart = mmEdgePoint(pos.x, pos.y, nx, ny, topicR);
+      const burstEnd = mmEdgePoint(nx, ny, pos.x, pos.y, noteR);
+      parts.push(`<line class="mm-line mm-pop-init" data-mm-burst="1" x1="${burstStart.x}" y1="${burstStart.y}" x2="${burstEnd.x}" y2="${burstEnd.y}" stroke="${color}" stroke-opacity="0.5" stroke-width="1.25"></line>`);
+      parts.push(`<g class="mm-node mm-note-group mm-pop-init" data-mm-burst="1" data-id="${n.id}" tabindex="0" role="button" aria-label="Open note ${escapeHtml(rawTitle)}">
+        <circle cx="${nx}" cy="${ny}" r="${noteR}" fill="${color}" fill-opacity="0.6" stroke="${color}" stroke-width="1.5"></circle>
+        <text x="${nx+dx}" y="${ny+3}" text-anchor="${anchor}" font-size="10" class="mm-label">${label}</text>
+        <title>${escapeHtml(rawTitle)} — click to open</title>
+      </g>`);
+    });
+  }
+
+  svg.innerHTML = parts.join('');
+
+  // A click that fires right after an actual pan drag shouldn't also open/collapse
+  // whatever happened to be under the pointer when it was released.
+  const guardClick = (fn) => (e) => {
+    if(mindMapJustPanned){ mindMapJustPanned = false; return; }
+    fn(e);
+  };
+  svg.querySelector('.mm-background').addEventListener('click', guardClick(()=>{
+    if(state.mindMapExpandedTopic){ state.mindMapExpandedTopic = null; renderMindMap(); }
+  }));
+  svg.querySelectorAll('.mm-topic').forEach(node=>{
+    const openIt = ()=>{
+      const t = node.dataset.topic;
+      const opening = state.mindMapExpandedTopic !== t;
+      state.mindMapExpandedTopic = opening ? t : null;
+      if(opening && !state.mindMapListMode){
+        // Auto-frame the view on the topic that just opened. Its burst of notes can
+        // land well outside whatever the user happened to be looking at before —
+        // without this, newly-revealed note labels could render entirely off-screen
+        // and look like they'd been cut off / gone missing.
+        centerMindMapOn(topicPositions[t].x, topicPositions[t].y);
+      }
+      renderMindMap();
+    };
+    node.addEventListener('click', guardClick((e)=>{ e.stopPropagation(); openIt(); }));
+    node.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openIt(); } });
+  });
+  svg.querySelectorAll('.mm-node').forEach(node=>{
+    node.addEventListener('click', guardClick((e)=>{ e.stopPropagation(); openNote(node.dataset.id); }));
+    node.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openNote(node.dataset.id); } });
+  });
+
+  // Animate the just-revealed burst in ("pop") rather than snapping it in instantly
+  const popEls = svg.querySelectorAll('[data-mm-burst]');
+  if(popEls.length){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        popEls.forEach(el=>el.classList.remove('mm-pop-init'));
+      });
+    });
+  }
+
+  $('mm-legend').innerHTML = topics.map(t=>`<span><span class="mm-dot" style="background:${TOPIC_COLOR[t]||'#8a8a86'}"></span>${escapeHtml(t)}</span>`).join('')
+    + `<span style="color:var(--text-muted);">Drag to pan &middot; click a topic to ${state.mindMapListMode ? 'list its notes' : 'see its notes'}</span>`;
+
+  if(state.mindMapListMode && state.mindMapExpandedTopic && topics.includes(state.mindMapExpandedTopic)){
+    renderMindMapNoteList(state.mindMapExpandedTopic);
+  } else {
+    $('mm-list-panel').classList.add('hidden');
+    $('mm-list-panel').innerHTML = '';
+  }
+
+  initMindMapPan();
+}
+function toggleMindMapListMode(){
+  state.mindMapListMode = !state.mindMapListMode;
+  renderMindMap();
+}
+// Re-centers the pannable view on a specific world-space point, keeping the current
+// zoom level (mindMapPan.w/h) the same — used to auto-frame a topic's burst when it
+// opens, and by Recenter to jump back to the hub.
+function centerMindMapOn(x, y){
+  if(!mindMapPan) return;
+  mindMapPan.x = x - mindMapPan.w/2;
+  mindMapPan.y = y - mindMapPan.h/2;
+}
+
+/* -- Topic manager: add / rename / delete topics right from the mind map, using the
+   same chip + hover-to-reveal (desktop) / tap-to-reveal (mobile) pattern already used
+   for folders and filters elsewhere in the app. -- */
+function renderMindMapTopicsManager(){
+  const el = $('mm-topics-manager');
+  if(!el) return;
+  el.innerHTML = '';
+  TOPICS.forEach(topic=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    const dot = document.createElement('span');
+    dot.className = 'mm-dot';
+    dot.style.background = TOPIC_COLOR[topic] || '#8a8a86';
+    dot.style.marginRight = '2px';
+    chip.appendChild(dot);
+    const label = document.createElement('span');
+    label.textContent = topic;
+    chip.appendChild(label);
+
+    const edit = document.createElement('button');
+    edit.className = 'chip-edit'; edit.textContent = '✎'; edit.title = 'Rename this topic';
+    edit.setAttribute('aria-label', 'Rename ' + topic);
+    edit.onclick = (e)=>{ e.stopPropagation(); renameMindMapTopic(topic); };
+
+    const del = document.createElement('button');
+    del.className = 'chip-del'; del.textContent = '×'; del.title = 'Delete this topic';
+    del.setAttribute('aria-label', 'Delete ' + topic);
+    del.onclick = (e)=>{ e.stopPropagation(); deleteMindMapTopic(topic); };
+
+    const more = document.createElement('button');
+    more.className = 'chip-more'; more.textContent = '⋯'; more.title = 'More options';
+    more.setAttribute('aria-label', 'More options for ' + topic);
+    more.onclick = (e)=>{ e.stopPropagation(); revealChipExtras(more); };
+
+    chip.appendChild(more);
+    chip.appendChild(edit);
+    chip.appendChild(del);
+    el.appendChild(chip);
+  });
+  const addChip = document.createElement('div');
+  addChip.className = 'chip chip-add';
+  addChip.textContent = '+ Add topic';
+  addChip.onclick = (e)=>{ e.stopPropagation(); addMindMapTopic(); };
+  el.appendChild(addChip);
+}
+function revealChipExtras(moreBtn){
+  const chip = moreBtn.closest('.chip');
+  document.querySelectorAll('.chip-del.revealed, .chip-edit.revealed').forEach(b=>{
+    if(!chip || !chip.contains(b)) b.classList.remove('revealed');
+  });
+  if(chip) chip.querySelectorAll('.chip-del, .chip-edit').forEach(b=>b.classList.toggle('revealed'));
+}
+function addMindMapTopic(){
+  const name = (prompt('New topic name')||'').trim();
+  if(!name) return;
+  if(TOPICS.some(t=>t.toLowerCase()===name.toLowerCase())){
+    alert(`"${name}" already exists.`);
+    return;
+  }
+  TOPICS.push(name);
+  TOPIC_COLOR[name] = nextTopicColor();
+  scheduleProfileSync();
+  renderMindMap();
+}
+function renameMindMapTopic(oldName){
+  const name = (prompt('Rename topic', oldName)||'').trim();
+  if(!name || name === oldName) return;
+  if(TOPICS.some(t=>t.toLowerCase()===name.toLowerCase())){
+    alert(`"${name}" already exists.`);
+    return;
+  }
+  const idx = TOPICS.indexOf(oldName);
+  if(idx>-1) TOPICS[idx] = name;
+  if(TOPIC_COLOR[oldName]){ TOPIC_COLOR[name] = TOPIC_COLOR[oldName]; delete TOPIC_COLOR[oldName]; }
+  const affectedNotes = state.notes.filter(n=>n.topic===oldName);
+  affectedNotes.forEach(n=>{ n.topic = name; scheduleNoteSync(n); });
+  scheduleProfileSync();
+  if(state.filters.topic===oldName) state.filters.topic = name;
+  if(state.mindMapExpandedTopic===oldName) state.mindMapExpandedTopic = name;
+  renderMindMap();
+  if(state.activeView==='notes') renderNotesList();
+  if(state.activeView==='timeline') renderTimeline();
+}
+function deleteMindMapTopic(name){
+  const affectedNotes = state.notes.filter(n=>n.topic===name);
+  const affected = affectedNotes.length;
+  const msg = affected>0
+    ? `Delete topic "${name}"? ${affected} note${affected===1?'':'s'} will be moved to another topic.`
+    : `Delete topic "${name}"?`;
+  if(!confirm(msg)) return;
+  const idx = TOPICS.indexOf(name);
+  if(idx>-1) TOPICS.splice(idx,1);
+  delete TOPIC_COLOR[name];
+  if(TOPICS.length===0){ TOPICS.push('Uncategorized'); TOPIC_COLOR['Uncategorized'] = nextTopicColor(); }
+  const fallback = TOPICS[0];
+  affectedNotes.forEach(n=>{ n.topic = fallback; scheduleNoteSync(n); });
+  scheduleProfileSync();
+  if(state.filters.topic===name) state.filters.topic = null;
+  if(state.mindMapExpandedTopic===name) state.mindMapExpandedTopic = null;
+  renderMindMap();
+  if(state.activeView==='notes') renderNotesList();
+  if(state.activeView==='timeline') renderTimeline();
+}
+// Note -> topic reassignment, directly from the mind map (list mode note rows).
+function reassignNoteTopic(noteId, newTopic){
+  const n = state.notes.find(x=>x.id===noteId);
+  if(!n || !newTopic) return;
+  n.topic = newTopic;
+  scheduleNoteSync(n);
+  renderMindMap();
+}
+
+/* -- List mode: instead of bursting note-nodes out on the SVG canvas (which can
+   crowd or clip long titles), clicking a topic shows a plain, scrollable HTML list
+   of its notes — nothing to overlap or run off-screen. -- */
+function renderMindMapNoteList(topic){
+  const panel = $('mm-list-panel');
+  const notes = state.notes.filter(n=>n.topic===topic).sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const topicOptions = TOPICS.map(t=>`<option value="${escapeHtml(t)}" ${t===topic?'selected':''}>${escapeHtml(t)}</option>`).join('');
+  panel.innerHTML = `
+    <div class="mm-list-head">
+      <h4>${escapeHtml(topic)} &middot; ${notes.length} note${notes.length===1?'':'s'}</h4>
+      <button class="icon ghost" title="Close list" aria-label="Close list" onclick="state.mindMapExpandedTopic=null;renderMindMap();">&times;</button>
+    </div>
+    ${notes.length===0 ? '<div class="empty-state" style="padding:20px;">No notes in this topic yet.</div>' : notes.map(n=>`
+      <div class="mm-list-row">
+        <div class="mm-list-row-main" onclick="openNote('${n.id}')">
+          <h5>${n.locked ? '&#128274; ' : ''}${escapeHtml(n.title)||'Untitled'}</h5>
+          <div class="sub">${fmtDate(n.date)} &middot; ${MOOD_ICON[n.mood]||''} ${escapeHtml(n.mood||'')}${n.voices && n.voices.length ? ' &middot; &#127908;' : ''}</div>
+        </div>
+        <select title="Move to a different topic" aria-label="Move ${escapeHtml(n.title||'Untitled')} to a different topic" onchange="reassignNoteTopic('${n.id}', this.value)">
+          ${topicOptions}
+        </select>
+      </div>
+    `).join('')}
+  `;
+  panel.classList.remove('hidden');
+}
+
+/* -- Free panning: drag (mouse or touch) anywhere on the map to move around it.
+   We shift the SVG's viewBox origin directly rather than moving individual nodes,
+   so node math never has to know about the current pan position. -- */
+let mindMapDragState = null;
+let mindMapJustPanned = false;
+function initMindMapPan(){
+  const svg = $('mindmap-svg');
+  if(!svg || svg._mmPanBound) return;
+  svg._mmPanBound = true;
+
+  const beginDrag = (clientX, clientY) => {
+    mindMapDragState = { startX: clientX, startY: clientY, panX: mindMapPan.x, panY: mindMapPan.y, moved:false };
+    svg.classList.add('mm-panning');
+  };
+  const dragTo = (clientX, clientY) => {
+    if(!mindMapDragState) return;
+    const rect = svg.getBoundingClientRect();
+    if(!rect.width || !rect.height) return;
+    const scaleX = mindMapPan.w / rect.width;
+    const scaleY = mindMapPan.h / rect.height;
+    const dx = (clientX - mindMapDragState.startX) * scaleX;
+    const dy = (clientY - mindMapDragState.startY) * scaleY;
+    if(Math.abs(clientX - mindMapDragState.startX) > 3 || Math.abs(clientY - mindMapDragState.startY) > 3){
+      mindMapDragState.moved = true;
+    }
+    mindMapPan.x = mindMapDragState.panX - dx;
+    mindMapPan.y = mindMapDragState.panY - dy;
+    svg.setAttribute('viewBox', `${mindMapPan.x} ${mindMapPan.y} ${mindMapPan.w} ${mindMapPan.h}`);
+  };
+  const endDrag = () => {
+    if(mindMapDragState && mindMapDragState.moved) mindMapJustPanned = true;
+    mindMapDragState = null;
+    svg.classList.remove('mm-panning');
+  };
+
+  svg.addEventListener('mousedown', (e)=>{
+    if(e.button !== 0) return;
+    beginDrag(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e)=>{ if(mindMapDragState) dragTo(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', ()=>{ if(mindMapDragState) endDrag(); });
+
+  svg.addEventListener('touchstart', (e)=>{
+    if(e.touches.length !== 1) return;
+    beginDrag(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  svg.addEventListener('touchmove', (e)=>{
+    if(!mindMapDragState || e.touches.length !== 1) return;
+    dragTo(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:true});
+  svg.addEventListener('touchend', endDrag);
+  svg.addEventListener('touchcancel', endDrag);
+}
+
+/* ---------------- AI WELLNESS CHECK (mind map) ---------------- */
+function runWellnessCheck(){
+  const box = $('wellness-result');
+  if(!state.aiEnabled){
+    box.innerHTML = `<div class="ai-hint">AI is turned off. <button onclick="toggleAi();runWellnessCheck();">Turn on AI</button></div>`;
+    return;
+  }
+  const notes = state.notes;
+  if(notes.length===0){
+    box.innerHTML = `<div class="ai-hint">No notes yet to reflect on — write a few and check back.</div>`;
+    return;
+  }
+  const moodCounts = {};
+  notes.forEach(n=>{ moodCounts[n.mood] = (moodCounts[n.mood]||0)+1; });
+  const sortedMoods = Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]);
+  const topMood = sortedMoods[0][0];
+
+  const topicCounts = {};
+  notes.forEach(n=>{ topicCounts[n.topic] = (topicCounts[n.topic]||0)+1; });
+  const topTopic = Object.entries(topicCounts).sort((a,b)=>b[1]-a[1])[0][0];
+
+  const sorted = notes.slice().sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const recent = sorted.slice(0, Math.min(5, sorted.length));
+  const upbeat = ['Happy','Calm','Motivated'];
+  const recentUpbeatCount = recent.filter(n=>upbeat.includes(n.mood)).length;
+  const recentReadout = recentUpbeatCount >= Math.ceil(recent.length/2)
+    ? 'mostly upbeat lately'
+    : 'a mix, with some harder entries mixed in';
+
+  const moodBreakdown = sortedMoods.map(([m,c])=>`${escapeHtml(m)} (${c})`).join(', ');
+
+  box.innerHTML = `<div class="ai-hint" style="line-height:1.65;">
+    <b>✦ Wellness reflection</b> <span style="color:var(--text-muted);font-weight:400;">— a simple pattern read of your notes, not medical advice</span><br>
+    Across ${notes.length} note${notes.length===1?'':'s'}, your most common mood has been <b>${escapeHtml(topMood)}</b>,
+    and <b>${escapeHtml(topTopic)}</b> is what you write about most. Mood breakdown: ${moodBreakdown}.<br>
+    Your last few entries read as ${recentReadout}. ${recentUpbeatCount >= Math.ceil(recent.length/2)
+      ? "Whatever you've been doing seems to be working — worth noticing what it is."
+      : "If things have felt heavy, it can help to talk it through with someone you trust — this reflection is just a pattern in your own notes, not a diagnosis."}
+  </div>`;
+}
+
+/* ---------------- SETTINGS (draft pattern: nothing applies until Save is clicked) ---------------- */
+function initSettingsDraft(){
+  settingsDraft = {
+    colorMode: state.colorMode,
+    useCustomAccent: state.useCustomAccent,
+    customAccent: state.customAccent,
+    aiEnabled: state.aiEnabled,
+    autosave: state.autosave,
+    aiAutoTag: state.aiAutoTag,
+    aiDigest: state.aiDigest,
+    defaultFont: state.defaultFont,
+    name: state.user.name,
+    email: state.user.email
+  };
+}
+function renderSettings(){
+  initSettingsDraft();
+  renderSettingsFromDraft();
+}
+function renderSettingsFromDraft(){
+  document.querySelectorAll('.theme-opt').forEach(o=>o.classList.remove('active'));
+  const opt = $('mode-opt-'+settingsDraft.colorMode); if(opt) opt.classList.add('active');
+  $('custom-accent').value = settingsDraft.customAccent;
+  $('accent-status-sub').textContent = settingsDraft.useCustomAccent
+    ? 'Custom color selected — click Save settings to apply'
+    : 'Using the default color';
+  $('switch-ai').classList.toggle('on', settingsDraft.aiEnabled);
+  $('switch-autosave').classList.toggle('on', settingsDraft.autosave);
+  $('switch-ai-tag').classList.toggle('on', settingsDraft.aiAutoTag);
+  $('switch-ai-digest').classList.toggle('on', settingsDraft.aiDigest);
+  $('set-default-font').value = settingsDraft.defaultFont;
+  $('set-name').value = settingsDraft.name;
+  $('set-email').value = settingsDraft.email;
+  $('auto-theme-status').classList.toggle('hidden', state.colorMode!=='auto');
+  if(state.colorMode==='auto') applyAutoTheme();
+}
+function setDraftColorMode(mode){ settingsDraft.colorMode = mode; renderSettingsFromDraft(); }
+function toggleDraftSwitch(key){ settingsDraft[key] = !settingsDraft[key]; renderSettingsFromDraft(); }
+function setDraftAccent(val){
+  settingsDraft.customAccent = val;
+  settingsDraft.useCustomAccent = true;
+  renderSettingsFromDraft();
+}
+function resetDraftAccent(){
+  settingsDraft.useCustomAccent = false;
+  renderSettingsFromDraft();
+}
+function relativeLuminance(hex){
+  const c = (hex||'#7f6a4d').replace('#','');
+  const r=parseInt(c.substr(0,2),16)/255, g=parseInt(c.substr(2,2),16)/255, b=parseInt(c.substr(4,2),16)/255;
+  const lin = v => (isNaN(v)?0.3: (v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4)));
+  return 0.2126*lin(r)+0.7152*lin(g)+0.0722*lin(b);
+}
+function applyAccentSetting(){
+  const root = document.documentElement;
+  if(state.useCustomAccent){
+    root.style.setProperty('--accent', state.customAccent);
+    root.style.setProperty('--accent-ink', relativeLuminance(state.customAccent) > 0.55 ? '#1c1a15' : '#ffffff');
+  } else {
+    root.style.removeProperty('--accent');
+    root.style.removeProperty('--accent-ink');
+  }
+}
+function applyAutoTheme(){
+  const hour = new Date().getHours();
+  const isDark = hour >= 19 || hour < 7;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const flag = $('auto-theme-status');
+  if(flag) flag.textContent = `Currently showing ${isDark?'dark':'light'} mode — it's ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})} where you are. Dark mode runs 7pm–7am.`;
+}
+function applyColorMode(){
+  clearInterval(state.autoThemeTimer);
+  const root = document.documentElement;
+  if(state.colorMode==='light') root.setAttribute('data-theme','light');
+  if(state.colorMode==='dark') root.setAttribute('data-theme','dark');
+  if(state.colorMode==='auto'){
+    applyAutoTheme();
+    state.autoThemeTimer = setInterval(applyAutoTheme, 60000);
+  }
+  applyAccentSetting();
+}
+async function saveSettings(){
+  state.colorMode = settingsDraft.colorMode;
+  state.useCustomAccent = settingsDraft.useCustomAccent;
+  state.customAccent = settingsDraft.customAccent;
+  state.aiEnabled = settingsDraft.aiEnabled;
+  state.autosave = settingsDraft.autosave;
+  state.aiAutoTag = settingsDraft.aiAutoTag;
+  state.aiDigest = settingsDraft.aiDigest;
+  state.defaultFont = settingsDraft.defaultFont;
+  state.user.name = settingsDraft.name.trim() || state.user.name;
+
+  // Email changes go through Supabase's real auth system rather than just
+  // updating a local field — this actually changes your login email, but
+  // only after you confirm it via a link Supabase emails you (that's Supabase's
+  // own security behavior, not something this app can skip). Until you
+  // confirm, your login email stays whatever it currently is.
+  const emailStatusEl = $('email-change-status');
+  if(emailStatusEl) emailStatusEl.textContent = '';
+  const newEmail = settingsDraft.email.trim();
+  if(newEmail && newEmail !== state.user.email){
+    if(!supabaseClient){
+      if(emailStatusEl){ emailStatusEl.style.color = 'var(--danger)'; emailStatusEl.textContent = checkSupabaseReady() || 'Not connected.'; }
+    } else {
+      const { error } = await supabaseClient.auth.updateUser({ email: newEmail });
+      if(error){
+        if(emailStatusEl){ emailStatusEl.style.color = 'var(--danger)'; emailStatusEl.textContent = error.message || 'Could not update your email.'; }
+      } else if(emailStatusEl){
+        emailStatusEl.style.color = 'var(--text-2)';
+        emailStatusEl.textContent = `Confirmation email sent to ${newEmail} — your login email won't change until you click the link in it.`;
+      }
+    }
+  }
+
+  applyColorMode();
+  $('user-name-chip').textContent = state.user.name;
+  $('user-avatar').textContent = (state.user.name||'?')[0].toUpperCase();
+
+  if(state.activeNoteId){
+    const n = state.notes.find(x=>x.id===state.activeNoteId);
+    if(n){
+      renderAiHint(n);
+      $('save-flag').textContent = state.autosave ? 'All changes saved' : 'No unsaved changes';
+      $('save-flag').style.color = 'var(--text-muted)';
+    }
+  }
+  if(!state.aiEnabled) closeAiPanel();
+  if(state.activeView==='ai') renderAiChatView();
+
+  scheduleProfileSync();
+  renderSidebar();
+  initSettingsDraft();
+  renderSettingsFromDraft();
+
+  const flag = $('settings-save-flag');
+  flag.textContent = 'Settings saved';
+  clearTimeout(saveSettings._t);
+  saveSettings._t = setTimeout(()=>{ const f=$('settings-save-flag'); if(f) f.textContent=''; }, 2200);
+}
+function importTheme(e){
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const t = JSON.parse(reader.result);
+      if(t.accent){
+        settingsDraft.customAccent = t.accent;
+        settingsDraft.useCustomAccent = true;
+        renderSettingsFromDraft();
+        alert('Accent color imported. Click Save settings to apply.');
+      } else {
+        alert('That file has no "accent" field.');
+      }
+    }catch(err){ alert('Could not read theme file — expected JSON with an "accent" field.'); }
+  };
+  reader.readAsText(file);
+}
+/* Immediate-apply AI toggle, used by "Turn on AI" quick buttons outside Settings
+   (per-note AI panel, AI chat tab). The Settings page's own AI switch is deferred
+   and only takes effect through saveSettings(). */
+function toggleAi(){
+  state.aiEnabled = !state.aiEnabled;
+  if(settingsDraft) settingsDraft.aiEnabled = state.aiEnabled;
+  if(state.activeNoteId){ const n=state.notes.find(x=>x.id===state.activeNoteId); if(n) renderAiHint(n); }
+  if(!state.aiEnabled) closeAiPanel();
+  if(state.activeView==='ai') renderAiChatView();
+  if(state.activeView==='settings') renderSettingsFromDraft();
+}
+function exportNotes(){
+  const blob = new Blob([JSON.stringify(state.notes, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='mind-archive-notes.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ---------------- AI PANEL (per-note quick actions) ---------------- */
+function openAiPanel(){
+  const panel = $('ai-panel'); panel.classList.remove('hidden');
+  const body = $('ai-panel-body');
+  if(!state.aiEnabled){
+    body.innerHTML = `<div class="ai-off">AI is turned off.<br><br><button onclick="toggleAi();openAiPanel();">Turn on AI</button></div>`;
+    return;
+  }
+  body.innerHTML = `
+    <button class="ai-action" onclick="runAi('summarize')">Summarize this note</button>
+    <button class="ai-action" onclick="runAi('tag')">Suggest mood &amp; topic</button>
+    <button class="ai-action" onclick="runAi('continue')">Continue writing</button>
+    <button class="ai-action" onclick="runAi('reflect')">Reflect vs. a year ago</button>
+    <div id="ai-result-area"></div>`;
+}
+function closeAiPanel(){ $('ai-panel').classList.add('hidden'); }
+function runAi(action){
+  const n = state.notes.find(x=>x.id===state.activeNoteId);
+  const text = stripHtml(n.content);
+  const results = {
+    summarize: text.length ? `Summary: ${text.slice(0,90)}${text.length>90?'…':''}` : 'Nothing to summarize yet — write a bit first.',
+    tag: `Suggested mood: ${n.mood}. Suggested topic: ${n.topic}. (Based on wording and past entries.)`,
+    continue: 'Suggested continuation: "...and looking back, that small decision mattered more than it felt like at the time."',
+    reflect: (()=>{ const yearAgo = state.notes.find(x=> x.id!==n.id && Math.abs(new Date(x.date)-new Date(new Date(n.date).setFullYear(new Date(n.date).getFullYear()-1))) < 1000*60*60*24*20 ); return yearAgo ? `A year before this note you wrote "${yearAgo.title}" — mood was ${yearAgo.mood}, now it's ${n.mood}.` : 'No note found from around a year before this one.'; })()
+  };
+  $('ai-result-area').innerHTML = `<div class="ai-result">${results[action]}</div>`;
+}
+
+/* ---------------- AI CHAT TAB ---------------- */
+function renderAiChatView(){
+  $('ai-chat-disabled').classList.toggle('hidden', state.aiEnabled);
+  $('ai-chat-enabled').classList.toggle('hidden', !state.aiEnabled);
+  if(!state.aiEnabled) return;
+  const log = $('ai-chat-log');
+  if(state.aiChat.length===0){
+    log.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;margin:auto;">Start a conversation — ask about your notes, brainstorm ideas, or just think out loud.</div>`;
+    return;
+  }
+  log.innerHTML = state.aiChat.map(m=>`
+    <div class="chat-bubble ${m.role}">
+      <div class="chat-role" style="${m.role==='user'?'text-align:right;':''}">${m.role==='user'?'You':'AI'}</div>
+      <div class="chat-text" style="background:${m.role==='user'?'var(--accent-soft)':'var(--surface-2)'};">${escapeHtml(m.text)}</div>
+    </div>`).join('');
+  log.scrollTop = log.scrollHeight;
+}
+function sendAiChat(){
+  if(!state.aiEnabled) return;
+  const input = $('ai-chat-input');
+  const text = input.value.trim();
+  if(!text) return;
+  state.aiChat.push({role:'user', text});
+  input.value='';
+  renderAiChatView();
+  setTimeout(()=>{
+    state.aiChat.push({role:'ai', text: generateAiReply(text)});
+    renderAiChatView();
+  }, 450);
+}
+function generateAiReply(text){
+  const lower = text.toLowerCase();
+  if(lower.includes('summar')) return 'I can pull together everything we\'ve discussed — click "Save as note" above and I\'ll turn this conversation into a note.';
+  if(lower.includes('?')) return `Here's a thought: "${text.replace(/\?+$/,'')}" is worth sitting with. What's drawing you to it right now?`;
+  const relatedTopics = [...new Set(state.notes.map(n=>n.topic))];
+  const t = relatedTopics.length ? relatedTopics[Math.floor(Math.random()*relatedTopics.length)] : 'Personal';
+  return `Noted. That connects to your ${t} notes — want me to look for patterns, or keep going?`;
+}
+function clearAiChat(){
+  if(state.aiChat.length && !confirm('Start a new conversation? This clears the current chat.')) return;
+  state.aiChat = [];
+  renderAiChatView();
+}
+function summarizeChatToNote(){
+  if(!state.aiEnabled){ alert('Turn on AI in settings first.'); return; }
+  if(state.aiChat.length===0){ alert('Nothing to summarize yet — start a conversation first.'); return; }
+  const userLines = state.aiChat.filter(m=>m.role==='user').map(m=>'<p>'+escapeHtml(m.text)+'</p>').join('');
+  const note = {
+    id: crypto.randomUUID(),
+    title: 'AI conversation — ' + new Date().toLocaleDateString(),
+    folder: state.folders[0] || 'Personal',
+    date: new Date().toISOString(),
+    mood: 'Reflective', topic: (TOPICS.includes('Ideas') ? 'Ideas' : TOPICS[0]), activity:'None', tags:[],
+    locked:false, password:null,
+    content: `<p><i>Summarized from an AI conversation.</i></p>${userLines}`,
+    voices:[]
+  };
+  state.notes.unshift(note);
+  scheduleNoteSync(note);
+  renderSidebar();
+  openNote(note.id);
+}
+
+/* ---------------- TAP-TO-REVEAL DELETE (mobile) ---------------- */
+function revealDelete(btn){
+  document.querySelectorAll('.folder-del.revealed, .chip-del.revealed').forEach(b=>{ if(b!==btn) b.classList.remove('revealed'); });
+  btn.classList.toggle('revealed');
+}
+
+/* ---------------- SIDEBAR: mobile drawer + collapse + resize ---------------- */
+function toggleMobileSidebar(){
+  $('sidebar').classList.toggle('open');
+  $('sidebar-backdrop').classList.toggle('open');
+}
+function closeMobileSidebar(){
+  const sb = $('sidebar'), bd = $('sidebar-backdrop');
+  if(sb) sb.classList.remove('open');
+  if(bd) bd.classList.remove('open');
+}
+function positionSidebarCollapseBtn(){
+  const sb = $('sidebar'), btn = $('sidebar-collapse-btn');
+  if(!sb || !btn) return;
+  if(sb.classList.contains('collapsed')){
+    btn.style.left = '-13px';
+  } else {
+    // Use the deterministic target width (the inline style set by the resize
+    // handle, or the CSS default) rather than getBoundingClientRect(), which
+    // reads a stale mid-transition value immediately after the .collapsed
+    // class is toggled (the sidebar animates width over .15s) and made the
+    // button land in the wrong spot right after expanding.
+    const w = parseInt(sb.style.width, 10) || sb.offsetWidth || 250;
+    btn.style.left = (w - 13) + 'px';
+  }
+}
+function toggleSidebarCollapse(){
+  const sb = $('sidebar');
+  sb.classList.toggle('collapsed');
+  const btn = $('sidebar-collapse-btn');
+  btn.innerHTML = sb.classList.contains('collapsed') ? '&#10095;' : '&#10094;';
+  btn.title = sb.classList.contains('collapsed') ? 'Expand sidebar' : 'Collapse sidebar';
+  positionSidebarCollapseBtn();
+}
+(function initSidebarResize(){
+  const handle = document.getElementById('sidebar-resize-handle');
+  const sidebar = document.getElementById('sidebar');
+  const collapseBtn = document.getElementById('sidebar-collapse-btn');
+  if(!handle || !sidebar) return;
+  positionSidebarCollapseBtn();
+  window.addEventListener('resize', positionSidebarCollapseBtn);
+  // Backup: once the width transition actually finishes, re-sync the button in
+  // case anything (e.g. a resize mid-animation) left it slightly off.
+  sidebar.addEventListener('transitionend', (e)=>{
+    if(e.propertyName === 'width') positionSidebarCollapseBtn();
+  });
+  let dragging = false;
+  handle.addEventListener('mousedown', (e)=>{
+    if(sidebar.classList.contains('collapsed')) return;
+    dragging = true;
+    handle.classList.add('dragging');
+    // Disable the width/left transitions while actively dragging so the
+    // sidebar and its collapse button track the mouse 1:1 instead of easing
+    // behind it.
+    sidebar.classList.add('no-anim');
+    if(collapseBtn) collapseBtn.classList.add('no-anim');
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const w = Math.max(180, Math.min(440, e.clientX));
+    sidebar.style.width = w+'px';
+    positionSidebarCollapseBtn();
+  });
+  document.addEventListener('mouseup', ()=>{
+    if(dragging){
+      dragging=false;
+      handle.classList.remove('dragging');
+      sidebar.classList.remove('no-anim');
+      if(collapseBtn) collapseBtn.classList.remove('no-anim');
+      document.body.style.userSelect='';
+    }
+  });
+})();
+
+/* ---------------- INIT ---------------- */
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('.user-chip') && !e.target.closest('#user-menu')) closeUserMenu();
+  if(!e.target.closest('.folder-del') && !e.target.closest('.folder-more') && !e.target.closest('.chip-del') && !e.target.closest('.chip-more')){
+    document.querySelectorAll('.folder-del.revealed, .chip-del.revealed').forEach(b=>b.classList.remove('revealed'));
+  }
+});
+
+// If the browser already has a valid Supabase session (e.g. you closed the
+// tab and came back), skip straight past the login screen instead of making
+// you log in again every visit.
+async function restoreSession(){
+  const notReady = checkSupabaseReady();
+  if(notReady){
+    const errBox = $('auth-error');
+    if(errBox){ errBox.style.color = 'var(--danger)'; errBox.textContent = notReady; }
+    return;
+  }
+  try{
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if(session && session.user){
+      await onAuthSuccess();
+    }
+  }catch(err){
+    console.error('Could not restore session', err);
+  }
+}
+
+// Entry point: a shared-note link (/n/<token>) shows the public read-only
+// view instead of the normal login/app flow — no session needed, no
+// account check, works for a visitor who's never signed up.
+(async function boot(){
+  const shareMatch = window.location.pathname.match(/^\/n\/([^/?#]+)/);
+  if(shareMatch){
+    await showSharedNote(decodeURIComponent(shareMatch[1]));
+    return;
+  }
+  await restoreSession();
+})();
+</script>
+</body>
+</html>
