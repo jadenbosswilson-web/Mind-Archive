@@ -542,17 +542,24 @@
         </div>
         <div class="toolbar-row">
           <button onclick="clearAiChat()">New conversation</button>
-          <button class="primary" onclick="summarizeChatToNote()">Save as note</button>
+          <button class="primary" id="ai-save-note-btn" onclick="summarizeChatToNote()">Save as note</button>
         </div>
       </div>
       <div id="ai-chat-disabled" class="hidden ai-off">
         AI is turned off.<br><br><button onclick="toggleAi();renderAiChatView();">Turn on AI</button>
       </div>
       <div id="ai-chat-enabled">
+        <div id="weekly-digest-card" class="settings-card hidden" style="margin-bottom:16px;max-width:640px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <h3 style="margin:0;font-size:14px;">Weekly reflection digest</h3>
+            <button id="digest-generate-btn" onclick="generateWeeklyDigest(true)">Generate now</button>
+          </div>
+          <div id="weekly-digest-body" style="margin-top:10px;font-size:13px;line-height:1.6;color:var(--text-2);"></div>
+        </div>
         <div id="ai-chat-log"></div>
         <div style="display:flex;gap:8px;max-width:640px;">
           <input type="text" id="ai-chat-input" placeholder="Ask the AI anything..." onkeydown="if(event.key==='Enter'){sendAiChat();}">
-          <button class="primary" onclick="sendAiChat()">Send</button>
+          <button class="primary" id="ai-chat-send-btn" onclick="sendAiChat()">Send</button>
         </div>
       </div>
     </section>
@@ -651,17 +658,17 @@
 
         <div class="settings-card">
           <h3>AI</h3>
-          <div class="desc">Control the AI assistant. Click Save settings above to apply.</div>
+          <div class="desc">Control the AI assistant. All AI features (chat, tagging, digest) require the optional ai-assistant Edge Function (see README) — they show a clear "not set up" message until that's deployed. Click Save settings above to apply.</div>
           <div class="setting-row">
             <div><div class="label">Enable AI assistant</div><div class="sub">Chat, suggestions, tagging, reflections</div></div>
             <button class="switch on" id="switch-ai" onclick="toggleDraftSwitch('aiEnabled')"></button>
           </div>
           <div class="setting-row">
-            <div><div class="label">Auto-tag mood &amp; topic</div></div>
+            <div><div class="label">Auto-tag mood &amp; topic</div><div class="sub">Automatically suggests &amp; applies a mood/topic a couple seconds after you pause typing in a note</div></div>
             <button class="switch on" id="switch-ai-tag" onclick="toggleDraftSwitch('aiAutoTag')"></button>
           </div>
           <div class="setting-row">
-            <div><div class="label">Weekly reflection digest</div></div>
+            <div><div class="label">Weekly reflection digest</div><div class="sub">A real AI-written reflection on your last 7 days of notes, shown at the top of the AI chat tab</div></div>
             <button class="switch" id="switch-ai-digest" onclick="toggleDraftSwitch('aiDigest')"></button>
           </div>
         </div>
@@ -852,6 +859,9 @@ let state = {
   aiDigest:false,
   defaultFont:'inherit',
   aiChat:[],
+  aiChatBusy:false,
+  lastDigestAt:null,
+  lastDigestText:null,
   folders:['Personal','Work','Ideas','Journal'],
   activeFolder:'All notes',
   activeView:'notes',
@@ -994,6 +1004,8 @@ async function loadUserData(user){
   state.autosave = profile.autosave !== false;
   state.aiAutoTag = profile.ai_auto_tag !== false;
   state.aiDigest = !!profile.ai_digest;
+  state.lastDigestAt = profile.last_digest_at || null;
+  state.lastDigestText = profile.last_digest_text || null;
   state.defaultFont = profile.default_font || 'inherit';
 
   try{
@@ -1100,7 +1112,7 @@ function navigate(view){
   if(view==='timeline') renderTimeline();
   if(view==='mindmap'){ const wr=$('wellness-result'); if(wr) wr.innerHTML=''; renderMindMap(); }
   if(view==='settings') renderSettings();
-  if(view==='ai') renderAiChatView();
+  if(view==='ai'){ renderAiChatView(); renderDigestCard(); generateWeeklyDigest(false); }
 }
 
 /* ---------------- SIDEBAR / FOLDERS ---------------- */
@@ -1541,6 +1553,7 @@ function onEditorChange(){
   } else {
     markUnsaved();
   }
+  scheduleAutoTag(n);
 }
 function saveNote(){
   const n = state.notes.find(x=>x.id===state.activeNoteId);
@@ -1669,16 +1682,65 @@ function insertImage(e){
   reader.readAsDataURL(file);
   e.target.value='';
 }
+/* This box used to show a hardcoded, parroted-back "AI suggestion" (just
+   echoing the note's own current mood field). Now it only ever shows real
+   output from the AI auto-tag call below — empty until that resolves. */
 function renderAiHint(n){
   const box = $('ai-hint-box');
   $('btn-ai').style.opacity = state.aiEnabled ? '1' : '.4';
-  if(!state.aiEnabled){ box.innerHTML=''; return; }
-  const wordCount = stripHtml(n.content).split(/\s+/).filter(Boolean).length;
-  box.innerHTML = `<div class="ai-hint">✦ AI suggestion: this reads as <b>${n.mood}</b>. Similar in tone to "${pickSimilar(n)}". ${wordCount>0?`(${wordCount} words)`:''}</div>`;
+  if(box) box.innerHTML = '';
 }
-function pickSimilar(n){
-  const similar = state.notes.filter(x=>x.id!==n.id && x.topic===n.topic);
-  return similar.length ? similar[0].title||'an earlier note' : 'nothing yet';
+
+/* ---------------- REAL AUTO-TAG (Settings > AI > "Auto-tag mood & topic") ----------------
+   Debounced so fast typing doesn't spam the AI: waits for a pause in
+   editing, then only actually calls the AI if the note has enough content
+   and has changed meaningfully since the last time it was tagged. Applies
+   the AI's real suggestion directly to the note's mood/topic (constrained
+   to the person's own configured lists — see note_tag in the Edge
+   Function) and shows what it did, rather than silently changing things
+   with no feedback. */
+const autoTagTimers = {};
+const autoTagLastLen = {};
+function scheduleAutoTag(n){
+  if(!n || !state.aiEnabled || !state.aiAutoTag) return;
+  clearTimeout(autoTagTimers[n.id]);
+  autoTagTimers[n.id] = setTimeout(()=>runAutoTag(n), 2500);
+}
+async function runAutoTag(n){
+  if(!state.aiEnabled || !state.aiAutoTag) return;
+  const isActive = state.activeNoteId === n.id;
+  const liveHtml = (isActive && $('note-content')) ? $('note-content').innerHTML : n.content;
+  const text = stripHtml(liveHtml);
+  if(text.trim().length < 30) return;
+  const prevLen = autoTagLastLen[n.id] || 0;
+  if(prevLen && Math.abs(text.length - prevLen) < 25) return;
+  const box = isActive ? $('ai-hint-box') : null;
+  if(box) box.innerHTML = `<div class="ai-hint" style="font-style:italic;">✦ AI is tagging this note…</div>`;
+  try{
+    const raw = await callAiAssistant('note_tag', { content: text, moods: MOODS, topics: TOPICS });
+    autoTagLastLen[n.id] = text.length;
+    const moodMatch = raw.match(/Mood:\s*(.+)/i);
+    const topicMatch = raw.match(/Topic:\s*(.+)/i);
+    const mood = moodMatch ? moodMatch[1].trim() : null;
+    const topic = topicMatch ? topicMatch[1].trim() : null;
+    if(mood && MOODS.includes(mood)) n.mood = mood;
+    if(topic && TOPICS.includes(topic)) n.topic = topic;
+    scheduleNoteSync(n);
+    renderSidebar();
+    if(isActive){
+      const moodSel = $('editor-mood'); if(moodSel) moodSel.value = n.mood;
+      const topicSel = $('editor-topic');
+      if(topicSel && Array.from(topicSel.options).some(o=>o.value===n.topic)) topicSel.value = n.topic;
+      const box2 = $('ai-hint-box');
+      if(box2) box2.innerHTML = `<div class="ai-hint">✦ AI auto-tagged this note: <b>${escapeHtml(n.mood)}</b> · <b>${escapeHtml(n.topic)}</b></div>`;
+    }
+  }catch(err){
+    console.error('Auto-tag failed', err);
+    if(isActive){
+      const box2 = $('ai-hint-box');
+      if(box2) box2.innerHTML = `<div class="ai-hint" style="color:var(--danger);">Could not auto-tag this note: ${escapeHtml(err.message || 'unknown error')}</div>`;
+    }
+  }
 }
 
 /* ---------------- VOICE MEMOS (multiple, named, per note — real audio) ----------------
@@ -2706,9 +2768,11 @@ async function saveSettings(){
       renderAiHint(n);
       $('save-flag').textContent = state.autosave ? 'All changes saved' : 'No unsaved changes';
       $('save-flag').style.color = 'var(--text-muted)';
+      scheduleAutoTag(n);
     }
   }
   if(!state.aiEnabled) closeAiPanel();
+  renderDigestCard();
   if(state.activeView==='ai') renderAiChatView();
 
   scheduleProfileSync();
@@ -2757,6 +2821,107 @@ function exportNotes(){
   URL.revokeObjectURL(url);
 }
 
+/* ---------------- AI BACKEND (real calls, no canned/templated text) ----------------
+   Every AI feature in the app — the chat tab and the four per-note quick
+   actions below — calls the same server-side "ai-assistant" Supabase Edge
+   Function, which forwards the real request to Claude and returns Claude's
+   actual reply. Nothing here is pattern-matched or hardcoded; if the Edge
+   Function isn't deployed/configured yet, these calls fail with a clear
+   error message rather than silently falling back to fake text. */
+async function callAiAssistant(action, payload){
+  if(!supabaseClient) throw new Error(checkSupabaseReady() || 'Not connected.');
+  const { data, error } = await supabaseClient.functions.invoke('ai-assistant', { body: { action, ...payload } });
+  if(error){
+    let msg = error.message || 'The AI request failed.';
+    try{
+      if(error.context && typeof error.context.json === 'function'){
+        const errBody = await error.context.json();
+        if(errBody && errBody.error) msg = errBody.error;
+      }
+    }catch(err){}
+    throw new Error(msg);
+  }
+  if(data && data.error) throw new Error(data.error);
+  if(!data || typeof data.text !== 'string') throw new Error('The AI returned an unexpected response.');
+  return data.text;
+}
+
+/* ---------------- WEEKLY REFLECTION DIGEST (Settings > AI) ----------------
+   A real, AI-written reflection on the last 7 days of notes — not a
+   canned toggle. Generates automatically once 7+ days have passed since
+   the last one (checked whenever you open the AI chat tab), or any time
+   via "Generate now." The result and the date it was written are saved to
+   your profile so it doesn't regenerate (and re-spend AI usage) every time
+   you just open the app. */
+function renderDigestCard(opts){
+  const card = $('weekly-digest-card');
+  if(!card) return;
+  if(!state.aiEnabled || !state.aiDigest){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  const body = $('weekly-digest-body');
+  const btn = $('digest-generate-btn');
+  if(opts && opts.busy){
+    if(btn) btn.disabled = true;
+    if(body) body.innerHTML = `<span style="font-style:italic;color:var(--text-muted);">Writing this week's reflection…</span>`;
+    return;
+  }
+  if(btn) btn.disabled = false;
+  if(opts && opts.error){
+    if(body) body.innerHTML = `<span style="color:var(--danger);">Could not generate the digest: ${escapeHtml(opts.error)}</span>`;
+    return;
+  }
+  const text = (opts && opts.text) || state.lastDigestText;
+  if(!body) return;
+  if(!text){
+    body.innerHTML = `<span style="color:var(--text-muted);">No digest yet — click "Generate now," or one will be written automatically once 7 days have passed since account setup.</span>`;
+    return;
+  }
+  const when = (opts && opts.generatedAt) || state.lastDigestAt;
+  const whenLabel = when ? `Last generated ${new Date(when).toLocaleDateString()}` : '';
+  const paragraphs = text.split(/\n{2,}/).map(p=>`<p style="margin:0 0 8px;">${escapeHtml(p.trim())}</p>`).join('');
+  body.innerHTML = `${paragraphs}<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${whenLabel}</div>`;
+}
+async function generateWeeklyDigest(force){
+  if(!state.aiEnabled || !state.aiDigest) return;
+  const now = Date.now();
+  const lastAt = state.lastDigestAt ? new Date(state.lastDigestAt).getTime() : 0;
+  const dueAutomatically = (now - lastAt) >= 7*24*60*60*1000;
+  if(!force && !dueAutomatically) return;
+
+  const since = new Date(now - 7*24*60*60*1000);
+  const recentNotes = state.notes
+    .filter(n => n.date && new Date(n.date) >= since)
+    .sort((a,b)=> new Date(a.date) - new Date(b.date))
+    .slice(-30);
+
+  if(recentNotes.length === 0){
+    renderDigestCard({ text: "No notes from the past 7 days yet — write a bit and check back.", generatedAt: null });
+    return;
+  }
+
+  renderDigestCard({ busy: true });
+  try{
+    const notesPayload = recentNotes.map(n => ({ date: n.date, mood: n.mood, topic: n.topic, content: stripHtml(n.content) }));
+    const text = await callAiAssistant('weekly_digest', { notes: notesPayload });
+    state.lastDigestText = text;
+    state.lastDigestAt = new Date().toISOString();
+    persistDigest();
+    renderDigestCard({ text, generatedAt: state.lastDigestAt });
+  }catch(err){
+    console.error('Weekly digest failed', err);
+    renderDigestCard({ error: err.message || 'unknown error' });
+  }
+}
+async function persistDigest(){
+  if(!supabaseClient) return;
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if(!user) return;
+  const { error } = await supabaseClient.from('profiles')
+    .update({ last_digest_at: state.lastDigestAt, last_digest_text: state.lastDigestText })
+    .eq('id', user.id);
+  if(error) console.error('Could not save the weekly digest to the cloud (will retry next time one is generated):', error);
+}
+
 /* ---------------- AI PANEL (per-note quick actions) ---------------- */
 function openAiPanel(){
   const panel = $('ai-panel'); panel.classList.remove('hidden');
@@ -2773,79 +2938,128 @@ function openAiPanel(){
     <div id="ai-result-area"></div>`;
 }
 function closeAiPanel(){ $('ai-panel').classList.add('hidden'); }
-function runAi(action){
+function formatTagSuggestion(raw, n){
+  const moodMatch = raw.match(/Mood:\s*(.+)/i);
+  const topicMatch = raw.match(/Topic:\s*(.+)/i);
+  const mood = moodMatch ? moodMatch[1].trim() : n.mood;
+  const topic = topicMatch ? topicMatch[1].trim() : n.topic;
+  return `Suggested mood: ${mood}. Suggested topic: ${topic}.`;
+}
+async function runAi(action){
   const n = state.notes.find(x=>x.id===state.activeNoteId);
+  if(!n) return;
   const text = stripHtml(n.content);
-  const results = {
-    summarize: text.length ? `Summary: ${text.slice(0,90)}${text.length>90?'…':''}` : 'Nothing to summarize yet — write a bit first.',
-    tag: `Suggested mood: ${n.mood}. Suggested topic: ${n.topic}. (Based on wording and past entries.)`,
-    continue: 'Suggested continuation: "...and looking back, that small decision mattered more than it felt like at the time."',
-    reflect: (()=>{ const yearAgo = state.notes.find(x=> x.id!==n.id && Math.abs(new Date(x.date)-new Date(new Date(n.date).setFullYear(new Date(n.date).getFullYear()-1))) < 1000*60*60*24*20 ); return yearAgo ? `A year before this note you wrote "${yearAgo.title}" — mood was ${yearAgo.mood}, now it's ${n.mood}.` : 'No note found from around a year before this one.'; })()
-  };
-  $('ai-result-area').innerHTML = `<div class="ai-result">${results[action]}</div>`;
+  const resultArea = $('ai-result-area');
+  if(resultArea) resultArea.innerHTML = `<div class="ai-result" style="font-style:italic;color:var(--text-muted);">Thinking…</div>`;
+  try{
+    let resultText;
+    if(action === 'summarize'){
+      resultText = text.trim() ? await callAiAssistant('note_summarize', { content: text }) : 'Nothing to summarize yet — write a bit first.';
+    } else if(action === 'tag'){
+      resultText = text.trim()
+        ? formatTagSuggestion(await callAiAssistant('note_tag', { content: text, moods: MOODS, topics: TOPICS }), n)
+        : 'Write a bit first, then I can suggest a mood and topic.';
+    } else if(action === 'continue'){
+      resultText = text.trim() ? await callAiAssistant('note_continue', { content: text }) : 'Write a bit first, then I can suggest how it might continue.';
+    } else if(action === 'reflect'){
+      const yearAgo = state.notes.find(x=> x.id!==n.id && Math.abs(new Date(x.date)-new Date(new Date(n.date).setFullYear(new Date(n.date).getFullYear()-1))) < 1000*60*60*24*20 );
+      resultText = yearAgo
+        ? await callAiAssistant('note_reflect', { content: text, mood: n.mood, pastContent: stripHtml(yearAgo.content), pastMood: yearAgo.mood })
+        : 'No note found from around a year before this one.';
+    }
+    if(resultArea) resultArea.innerHTML = `<div class="ai-result">${escapeHtml(resultText)}</div>`;
+  }catch(err){
+    console.error('AI action failed', err);
+    if(resultArea) resultArea.innerHTML = `<div class="ai-result" style="color:var(--danger);">Could not reach the AI: ${escapeHtml(err.message || 'unknown error')}</div>`;
+  }
 }
 
-/* ---------------- AI CHAT TAB ---------------- */
+/* ---------------- AI CHAT TAB (real, multi-turn conversation) ---------------- */
 function renderAiChatView(){
   $('ai-chat-disabled').classList.toggle('hidden', state.aiEnabled);
   $('ai-chat-enabled').classList.toggle('hidden', !state.aiEnabled);
   if(!state.aiEnabled) return;
   const log = $('ai-chat-log');
-  if(state.aiChat.length===0){
+  if(state.aiChat.length===0 && !state.aiChatBusy){
     log.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;margin:auto;">Start a conversation — ask about your notes, brainstorm ideas, or just think out loud.</div>`;
     return;
   }
-  log.innerHTML = state.aiChat.map(m=>`
+  let html = state.aiChat.map(m=>`
     <div class="chat-bubble ${m.role}">
       <div class="chat-role" style="${m.role==='user'?'text-align:right;':''}">${m.role==='user'?'You':'AI'}</div>
       <div class="chat-text" style="background:${m.role==='user'?'var(--accent-soft)':'var(--surface-2)'};">${escapeHtml(m.text)}</div>
     </div>`).join('');
+  if(state.aiChatBusy){
+    html += `<div class="chat-bubble ai">
+      <div class="chat-role">AI</div>
+      <div class="chat-text" style="background:var(--surface-2);color:var(--text-muted);font-style:italic;">Thinking…</div>
+    </div>`;
+  }
+  log.innerHTML = html;
   log.scrollTop = log.scrollHeight;
 }
-function sendAiChat(){
-  if(!state.aiEnabled) return;
+function setAiChatControlsDisabled(disabled){
+  const input = $('ai-chat-input');
+  const btn = $('ai-chat-send-btn');
+  if(input) input.disabled = disabled;
+  if(btn) btn.disabled = disabled;
+}
+async function sendAiChat(){
+  if(!state.aiEnabled || state.aiChatBusy) return;
   const input = $('ai-chat-input');
   const text = input.value.trim();
   if(!text) return;
   state.aiChat.push({role:'user', text});
   input.value='';
+  state.aiChatBusy = true;
+  setAiChatControlsDisabled(true);
   renderAiChatView();
-  setTimeout(()=>{
-    state.aiChat.push({role:'ai', text: generateAiReply(text)});
+  try{
+    const reply = await callAiAssistant('chat', { messages: state.aiChat });
+    state.aiChat.push({role:'ai', text: reply});
+  }catch(err){
+    console.error('AI chat failed', err);
+    state.aiChat.push({role:'ai', text: `I couldn't reach the AI just now — ${err.message || 'unknown error'}.`});
+  }finally{
+    state.aiChatBusy = false;
+    setAiChatControlsDisabled(false);
     renderAiChatView();
-  }, 450);
-}
-function generateAiReply(text){
-  const lower = text.toLowerCase();
-  if(lower.includes('summar')) return 'I can pull together everything we\'ve discussed — click "Save as note" above and I\'ll turn this conversation into a note.';
-  if(lower.includes('?')) return `Here's a thought: "${text.replace(/\?+$/,'')}" is worth sitting with. What's drawing you to it right now?`;
-  const relatedTopics = [...new Set(state.notes.map(n=>n.topic))];
-  const t = relatedTopics.length ? relatedTopics[Math.floor(Math.random()*relatedTopics.length)] : 'Personal';
-  return `Noted. That connects to your ${t} notes — want me to look for patterns, or keep going?`;
+  }
 }
 function clearAiChat(){
   if(state.aiChat.length && !confirm('Start a new conversation? This clears the current chat.')) return;
   state.aiChat = [];
   renderAiChatView();
 }
-function summarizeChatToNote(){
+async function summarizeChatToNote(){
   if(!state.aiEnabled){ alert('Turn on AI in settings first.'); return; }
   if(state.aiChat.length===0){ alert('Nothing to summarize yet — start a conversation first.'); return; }
-  const userLines = state.aiChat.filter(m=>m.role==='user').map(m=>'<p>'+escapeHtml(m.text)+'</p>').join('');
-  const note = {
-    id: crypto.randomUUID(),
-    title: 'AI conversation — ' + new Date().toLocaleDateString(),
-    folder: state.folders[0] || 'Personal',
-    date: new Date().toISOString(),
-    mood: 'Reflective', topic: (TOPICS.includes('Ideas') ? 'Ideas' : TOPICS[0]), activity:'None', tags:[],
-    locked:false, password:null,
-    content: `<p><i>Summarized from an AI conversation.</i></p>${userLines}`,
-    voices:[]
-  };
-  state.notes.unshift(note);
-  scheduleNoteSync(note);
-  renderSidebar();
-  openNote(note.id);
+  const btn = $('ai-save-note-btn');
+  const prevLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Summarizing…'; }
+  try{
+    const summary = await callAiAssistant('chat_summary', { messages: state.aiChat });
+    const paragraphs = summary.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
+    const note = {
+      id: crypto.randomUUID(),
+      title: 'AI conversation — ' + new Date().toLocaleDateString(),
+      folder: state.folders[0] || 'Personal',
+      date: new Date().toISOString(),
+      mood: 'Reflective', topic: (TOPICS.includes('Ideas') ? 'Ideas' : TOPICS[0]), activity:'None', tags:[],
+      locked:false, password:null,
+      content: paragraphs.map(p=>'<p>'+escapeHtml(p)+'</p>').join(''),
+      voices:[]
+    };
+    state.notes.unshift(note);
+    scheduleNoteSync(note);
+    renderSidebar();
+    openNote(note.id);
+  }catch(err){
+    console.error('Chat summary failed', err);
+    alert('Could not summarize the conversation: ' + (err.message || 'unknown error'));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = prevLabel || 'Save as note'; }
+  }
 }
 
 /* ---------------- TAP-TO-REVEAL DELETE (mobile) ---------------- */
