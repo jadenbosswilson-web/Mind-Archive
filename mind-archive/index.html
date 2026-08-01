@@ -281,6 +281,11 @@
     /* Menu button is pulled out of flow so the brand can sit truly centered
        in the middle of the header regardless of the button's width. */
     .mobile-topbar > button.icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);}
+    /* .brand normally carries a 24px bottom margin for spacing above forms
+       elsewhere in the app; that invisible margin was getting counted when
+       centering it vertically in this header row, so the visible logo sat
+       above true-center. Zero it out here so the logo lands mid-header. */
+    .mobile-topbar .brand{margin-bottom:0;}
     .sidebar{
       position:fixed;top:0;left:0;bottom:0;width:280px !important;max-width:84vw;
       transform:translateX(-100%);transition:transform .2s ease;z-index:41;box-shadow:0 0 0 transparent;
