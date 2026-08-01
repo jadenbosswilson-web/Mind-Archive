@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/n/:token", "destination": "/mind-archive-app.html" },
-    { "source": "/", "destination": "/mind-archive-app.html" }
+    { "source": "/(.*)", "destination": "/mind-archive-app.html" }
   ]
 }
