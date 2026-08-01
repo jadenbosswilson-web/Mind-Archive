@@ -1042,7 +1042,7 @@ async function loadUserData(user){
     state.notes = (notes||[]).map(row => ({
       id: row.id, title: row.title, folder: row.folder, date: row.date, mood: row.mood, topic: row.topic,
       activity: row.activity, tags: row.tags||[], locked: row.locked, password: row.note_password,
-      content: row.content, voices: row.voices||[], fontSize: row.font_size, shareToken: row.share_token || null,
+      content: row.content, voices: row.voices||[], shareToken: row.share_token || null,
       sharePermission: row.share_permission || 'view'
     }));
   }catch(err){ console.error('Could not load notes', err); state.notes = []; }
@@ -1106,7 +1106,6 @@ async function syncNoteNow(n){
     // Only persist the durable fields — not transient UI state (uploading/
     // uploadFailed flags) or the in-memory Audio element attached during playback.
     voices: (n.voices||[]).map(v => ({ id: v.id, name: v.name, duration: v.duration, path: v.path || null })),
-    font_size: n.fontSize || null,
     share_token: n.shareToken || null,
     share_permission: n.sharePermission || 'view'
   };
@@ -1556,8 +1555,11 @@ function renderEditor(id){
   fillSelectWithAdd($('editor-topic'), TOPICS, n.topic);
   fillSelectWithAdd($('editor-activity'), ACTIVITIES, n.activity);
   $('editor-date').textContent = fmtDate(n.date);
-  $('note-content').style.fontSize = n.fontSize ? n.fontSize + 'pt' : '';
-  $('font-size-input').value = n.fontSize || 12;
+  // Font size is purely a per-selection/per-run thing now (like Google Docs) —
+  // there's no single "this whole note's size" anymore, so the toolbar just
+  // shows a neutral default here and then updates live as the cursor moves
+  // (see captureNoteSelectionIfValid below).
+  $('font-size-input').value = 12;
   updateLockButton(n);
   renderVoiceMemos(n);
   $('voice-recording-bar').classList.add('hidden');
@@ -1573,8 +1575,6 @@ function commitEditorFieldsToNote(n){
   n.mood = $('editor-mood').value;
   n.topic = $('editor-topic').value;
   n.activity = $('editor-activity').value;
-  const fs = $('note-content').style.fontSize;
-  n.fontSize = fs ? parseInt(fs, 10) : null;
 }
 function markUnsaved(){
   const f = $('save-flag'); if(!f) return;
@@ -1622,13 +1622,34 @@ function applyFont(val){ document.execCommand('fontName', false, val); onEditorC
 // selection made inside the editor, and fall back to it if the live selection has
 // been cleared by the time a size change actually fires.
 let savedNoteRange = null;
+// Walks up from wherever the cursor/selection actually is to find the
+// nearest explicit font-size — this is what lets the toolbar show "the
+// current size" the way Google Docs' toolbar does, live, as you click
+// around the note (see the selectionchange listener below).
+function fontSizeAtSelection(sel, editor){
+  if(!sel || sel.rangeCount === 0) return null;
+  let node = sel.isCollapsed ? sel.anchorNode : sel.getRangeAt(0).commonAncestorContainer;
+  if(!node) return null;
+  if(node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  while(node && editor.contains(node)){
+    if(node.style && node.style.fontSize) return parseInt(node.style.fontSize, 10);
+    node = node.parentElement;
+  }
+  return null;
+}
 function captureNoteSelectionIfValid(){
   const editor = $('note-content');
   if(!editor) return;
   const sel = window.getSelection();
-  if(!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  if(!sel || sel.rangeCount === 0) return;
   if(editor.contains(sel.anchorNode) && editor.contains(sel.focusNode)){
+    // Remember exactly where the cursor/selection was — highlighted text
+    // AND a plain caret position both get saved now (not just highlights),
+    // so that clicking into the size control still applies to the right
+    // spot instead of losing track of where you were.
     savedNoteRange = sel.getRangeAt(0).cloneRange();
+    const sizeInput = $('font-size-input');
+    if(sizeInput) sizeInput.value = fontSizeAtSelection(sel, editor) || 12;
   }
 }
 document.addEventListener('selectionchange', captureNoteSelectionIfValid);
@@ -1640,37 +1661,62 @@ function stepFontSize(delta){
   input.value = v;
   applyFontSize(v);
 }
+/* Google-Docs-style font sizing: it only ever does one of two things —
+   resize exactly the highlighted text, or (with just a cursor, nothing
+   highlighted) set the size that whatever you type NEXT will be, without
+   touching anything already on the page. There's deliberately no "resize
+   the whole note" behavior anymore — that was the bug: with nothing
+   selected, this used to change the entire note's font size at once. */
 function applyFontSize(pt){
   pt = Math.max(6, Math.min(96, parseInt(pt,10) || 12));
   $('font-size-input').value = pt;
   const editor = $('note-content');
   const sel = window.getSelection();
-  const liveSelectionValid = sel && sel.rangeCount > 0 && !sel.isCollapsed
+  const liveSelectionValid = sel && sel.rangeCount > 0
     && editor.contains(sel.anchorNode) && editor.contains(sel.focusNode);
 
   let range = null;
   if(liveSelectionValid){
     range = sel.getRangeAt(0);
-  } else if(savedNoteRange && !savedNoteRange.collapsed
+  } else if(savedNoteRange
       && editor.contains(savedNoteRange.startContainer) && editor.contains(savedNoteRange.endContainer)){
-    // The live selection is gone (focus moved to the size control), but we captured
-    // the highlighted text right before that happened — use it instead.
+    // The live selection/cursor is gone (focus moved to the size control),
+    // but we captured exactly where it was right before that happened —
+    // use it instead, whether that was highlighted text or just a caret.
     range = savedNoteRange;
   }
 
   if(!range){
-    // Never had a selection at all: treat this as "the whole note's font size" instead
-    // of using execCommand('fontSize'), which (with a collapsed selection) used to wrap
-    // large, inconsistent chunks of the note in legacy <font> tags and threw off the layout.
-    editor.style.fontSize = pt + 'pt';
-    savedNoteRange = null;
-    onEditorChange();
+    // Never had a cursor in this note at all — nothing to resize and
+    // nowhere to set "next typed character" formatting either, so there's
+    // genuinely nothing to do (same as Google Docs with no document focus).
     return;
   }
 
-  // A specific range is selected: wrap just that range in a plain <span>, using the
-  // DOM Range API directly instead of execCommand (which is the safer, more predictable
-  // way to change font size for a selection without disturbing surrounding content).
+  if(range.collapsed){
+    // Just a cursor, nothing highlighted: insert an invisible zero-width
+    // marker sized to `pt` right at the cursor, and leave the caret inside
+    // it. Existing text is completely untouched — only characters typed
+    // from this point on inherit the new size, exactly like Google Docs'
+    // "format for next input" behavior.
+    const span = document.createElement('span');
+    span.style.fontSize = pt + 'pt';
+    span.appendChild(document.createTextNode('​')); // zero-width space
+    range.insertNode(span);
+    const caret = document.createRange();
+    caret.setStart(span.firstChild, 1);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+    editor.focus();
+    savedNoteRange = null;
+    return;
+  }
+
+  // Highlighted text: wrap just that range in a plain <span>, using the
+  // DOM Range API directly instead of execCommand (which is the safer, more
+  // predictable way to change font size for a selection without disturbing
+  // surrounding content).
   const span = document.createElement('span');
   span.style.fontSize = pt + 'pt';
   try{
