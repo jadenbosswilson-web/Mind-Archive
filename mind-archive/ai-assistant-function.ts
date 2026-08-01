@@ -58,7 +58,14 @@ const corsHeaders = {
 // touching this code.
 const DEFAULT_MODEL = 'gemini-3.5-flash'
 const MAX_HISTORY_MESSAGES = 20
-const MAX_OUTPUT_TOKENS = 700
+const MAX_OUTPUT_TOKENS = 1024
+// How long to wait on Gemini before giving up and returning a clear error
+// instead of hanging. Comfortably under Supabase's own 150s Edge Function
+// wall-clock limit — if we let a slow request ride all the way to that
+// limit, Supabase kills the function with NO response sent back at all,
+// which is exactly what makes the app look permanently "stuck" instead of
+// showing an error.
+const AI_TIMEOUT_MS = 25000
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -219,24 +226,66 @@ Deno.serve(async (req) => {
       parts: [{ text: m.content }],
     }))
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-goog-api-key': geminiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: prompt.system }] },
-          contents,
-          generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
-        }),
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
+    let resp: Response
+    try {
+      resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-goog-api-key': geminiKey,
+          },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: prompt.system }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: MAX_OUTPUT_TOKENS,
+              // Gemini 3.x models default to "medium" thinking (a slower,
+              // multi-step internal reasoning pass) when this isn't set at
+              // all — real, noticeable latency that isn't needed for any of
+              // this app's tasks (chatting, summarizing, tagging,
+              // continuing a journal entry, writing a digest). "low"
+              // minimizes that latency; older 2.5-series models ignore
+              // thinkingLevel and use thinkingBudget instead, which this
+              // app doesn't need to set since 2.5 Flash already skips
+              // thinking by default when no budget is given.
+              thinkingConfig: { thinkingLevel: 'low' },
+            },
+          }),
+          signal: controller.signal,
+        }
+      )
+    } catch (fetchErr) {
+      if ((fetchErr as Error)?.name === 'AbortError') {
+        return json(
+          {
+            error: `The AI took longer than ${Math.round(AI_TIMEOUT_MS / 1000)}s to respond, so this gave up rather than leaving you staring at "Thinking…" indefinitely. This is usually Gemini being briefly slow/overloaded — try again. If it happens every time, check Edge Functions → ai-assistant → Logs for details.`,
+          },
+          504
+        )
       }
-    )
+      return json({ error: `Could not reach Gemini: ${String((fetchErr as Error)?.message || fetchErr)}` }, 502)
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '')
+      // A 401/403 here is Google rejecting the GEMINI_API_KEY itself —
+      // distinct from this function's OWN 401 earlier (which means the
+      // caller isn't logged in to the app). Give the actionable reason up
+      // front rather than making the person decode a raw JSON error body.
+      if (resp.status === 401 || resp.status === 403) {
+        return json(
+          {
+            error: `Google rejected the Gemini API key (HTTP ${resp.status}) — the GEMINI_API_KEY secret is missing, mistyped, expired, or was created/restricted in a way this function can't use. Get a fresh key from https://aistudio.google.com/apikey (a plain API key, not a Vertex AI/OAuth credential), then replace the GEMINI_API_KEY secret in Supabase → Edge Functions → Manage secrets — delete the old one and re-add it rather than editing in place, in case stray whitespace snuck in on a copy/paste. Raw response: ${clip(errText, 200)}`,
+          },
+          502
+        )
+      }
       return json({ error: `AI request failed (${resp.status}): ${clip(errText, 300)}` }, 502)
     }
 
