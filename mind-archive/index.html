@@ -679,8 +679,16 @@
 </div>
 
 <!-- ============ SHARED NOTE (public, read-only, no login) ============ -->
-<div id="shared-note-view" class="hidden" style="max-width:640px;margin:60px auto;padding:0 20px;">
-  <div id="shared-note-content"></div>
+<!-- position:fixed + its own overflow-y:auto makes this its own scrollable
+     box spanning the whole screen, since html/body are deliberately locked
+     (see the "lock the outer page" rule above) to stop the whole app frame
+     from being draggable off screen — shared notes need their own scroll
+     the same way the sidebar/editor/etc. already do inside the logged-in
+     app shell. -->
+<div id="shared-note-view" class="hidden" style="position:fixed;inset:0;overflow-y:auto;padding:60px 20px;">
+  <div style="max-width:640px;margin:0 auto;">
+    <div id="shared-note-content"></div>
+  </div>
 </div>
 
 <!-- ============ MODALS ============ -->
@@ -2022,7 +2030,7 @@ async function showSharedNote(token){
         <div class="sub" style="margin-bottom:4px;">${metaBits}${metaBits ? ' &middot; ' : ''}Shared, editable by anyone with this link</div>
         <input type="text" id="shared-edit-title" style="font-size:22px;font-weight:600;border:none;padding:4px 0;margin-bottom:10px;width:100%;background:transparent;color:var(--text);">
         ${tags ? `<div style="margin-bottom:14px;">${tags}</div>` : ''}
-        <div id="shared-edit-content" contenteditable="true" style="min-height:220px;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface);color:var(--text);"></div>
+        <div id="shared-edit-content" contenteditable="true" style="min-height:220px;max-height:60vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface);color:var(--text);"></div>
         <div class="modal-actions" style="justify-content:flex-start;margin-top:14px;gap:12px;">
           <button class="primary" onclick="saveSharedEdit()">Save changes</button>
           <span class="sub" id="shared-save-status"></span>
