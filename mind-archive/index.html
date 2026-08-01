@@ -3069,9 +3069,26 @@ function exportNotes(){
    actual reply. Nothing here is pattern-matched or hardcoded; if the Edge
    Function isn't deployed/configured yet, these calls fail with a clear
    error message rather than silently falling back to fake text. */
+// Safety net on top of the Edge Function's own ~25s internal timeout: if a
+// request somehow never comes back at all (a stalled connection, a
+// Supabase-side hiccup, anything), this stops the UI from being stuck on
+// "Thinking…" forever — the person always gets a real, bounded answer.
+const AI_CLIENT_TIMEOUT_MS = 35000;
 async function callAiAssistant(action, payload){
   if(!supabaseClient) throw new Error(checkSupabaseReady() || 'Not connected.');
-  const { data, error } = await supabaseClient.functions.invoke('ai-assistant', { body: { action, ...payload } });
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("This is taking much longer than it should — the AI request may have stalled. Try again in a moment.")), AI_CLIENT_TIMEOUT_MS);
+  });
+  let data, error;
+  try{
+    ({ data, error } = await Promise.race([
+      supabaseClient.functions.invoke('ai-assistant', { body: { action, ...payload } }),
+      timeout,
+    ]));
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if(error){
     throw new Error(await describeAiAssistantError(error));
   }
