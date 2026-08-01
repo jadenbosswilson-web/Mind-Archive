@@ -28,6 +28,16 @@
     --accent:#cba36c; --accent-ink:#1c1a15; --accent-soft:#332c1f;
     --danger:#e58573; --danger-soft:#3a2420;
   }
+  /* Shared-note page: the note's own HTML (typed in the rich-text editor)
+     can carry inline color styles baked in from whenever it was written,
+     which otherwise stay put no matter what theme the *viewer* is in and
+     can end up unreadable (e.g. black text on a dark background). Force
+     it to always follow the same light/dark rule as the rest of the app
+     instead: white text in dark mode, black text in light mode. */
+  html[data-theme="light"] #shared-note-view,
+  html[data-theme="light"] #shared-note-view *{ color:#000000 !important; }
+  html[data-theme="dark"] #shared-note-view,
+  html[data-theme="dark"] #shared-note-view *{ color:#ffffff !important; }
   *{box-sizing:border-box;}
   /* Lock the outer page to exactly the viewport size so the whole app frame
      can never be dragged/rubber-banded off screen (a common mobile-browser
