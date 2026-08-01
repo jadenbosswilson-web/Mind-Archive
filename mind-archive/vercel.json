@@ -1,5 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/:path*", "destination": "/mind-archive-app.html" }
-  ]
-}
