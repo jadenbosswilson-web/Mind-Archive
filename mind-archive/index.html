@@ -2754,7 +2754,7 @@ async function saveEventFromModal(){
   if(!dateVal){ errEl.textContent = 'Pick a date.'; return; }
   const isNew = !currentEditingEventId;
   const ev = isNew
-    ? { id: uid(), shareToken: null, sourceShareToken: null }
+    ? { id: crypto.randomUUID(), shareToken: null, sourceShareToken: null }
     : state.calendarEvents.find(x=>x.id===currentEditingEventId);
   if(!ev) return;
   ev.title = title;
@@ -2909,7 +2909,7 @@ async function addSharedEventToMyCalendar(token){
     const row = Array.isArray(data) ? data[0] : data;
     if(error || !row){ if(statusEl) statusEl.textContent = "Couldn't load this event."; if(btn) btn.disabled = false; return; }
     const payload = {
-      id: uid(), user_id: user.id, title: row.title || '', description: row.description || '',
+      id: crypto.randomUUID(), user_id: user.id, title: row.title || '', description: row.description || '',
       event_date: row.event_date, event_time: row.event_time || null,
       reminder_enabled: false, reminder_lead_minutes: 30,
       share_token: null, source_share_token: token
