@@ -2740,7 +2740,10 @@ function openEditEventModal(id){
   $('event-time').value = e.eventTime ? String(e.eventTime).slice(0,5) : '';
   $('event-description').value = e.description || '';
   $('event-reminder-enabled').checked = !!e.reminderEnabled;
-  $('event-reminder-lead').value = String(e.reminderLeadMinutes || 30);
+  // Not "|| 30" — 0 ("Right at the time") is a legitimate, valid value and
+  // is falsy in JS, so that fallback would silently turn it back into 30
+  // every time this modal reopens. Only fall back when it's genuinely unset.
+  $('event-reminder-lead').value = String(e.reminderLeadMinutes != null ? e.reminderLeadMinutes : 30);
   toggleEventReminderFields();
   $('event-error').textContent = '';
   $('event-delete-btn').classList.remove('hidden');
@@ -2773,7 +2776,10 @@ async function saveEventFromModal(){
   ev.eventTime = $('event-time').value || null;
   ev.description = $('event-description').value;
   ev.reminderEnabled = $('event-reminder-enabled').checked;
-  ev.reminderLeadMinutes = parseInt($('event-reminder-lead').value,10) || 30;
+  // Same non-falsy-friendly parse as above — 0 minutes ("Right at the
+  // time") must survive, not collapse into the 30-minute default.
+  const parsedLead = parseInt($('event-reminder-lead').value, 10);
+  ev.reminderLeadMinutes = Number.isFinite(parsedLead) ? parsedLead : 30;
   if(isNew) state.calendarEvents.push(ev);
   const saveBtn = document.querySelector('#modal-event .modal-actions .primary');
   if(saveBtn) saveBtn.disabled = true;
@@ -2811,7 +2817,7 @@ async function syncEventNow(ev){
   const payload = {
     id: ev.id, user_id: user.id, title: ev.title||'', description: ev.description||'',
     event_date: ev.eventDate, event_time: ev.eventTime || null,
-    reminder_enabled: !!ev.reminderEnabled, reminder_lead_minutes: ev.reminderLeadMinutes || 30,
+    reminder_enabled: !!ev.reminderEnabled, reminder_lead_minutes: ev.reminderLeadMinutes != null ? ev.reminderLeadMinutes : 30,
     reminder_sent_at: null,
     share_token: ev.shareToken || null, source_share_token: ev.sourceShareToken || null
   };
