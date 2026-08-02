@@ -2772,7 +2772,8 @@ async function saveEventFromModal(){
     renderCalendar();
   }catch(err){
     console.error('Could not save event', err);
-    errEl.textContent = "Couldn't save this event — try again.";
+    const detail = (err && (err.message || err.error_description || err.hint)) ? `: ${err.message || err.error_description || err.hint}` : '';
+    errEl.textContent = `Couldn't save this event${detail}`;
     if(isNew) state.calendarEvents = state.calendarEvents.filter(x=>x.id!==ev.id);
   }finally{
     if(saveBtn) saveBtn.disabled = false;
