@@ -58,6 +58,17 @@
   input[type=text],input[type=email],input[type=password],input[type=search],input[type=number],select,textarea{
     width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);
   }
+  /* Browsers render the native date/time picker's own fill as plain white
+     regardless of page theme (there's no reliable way to make that native
+     widget dark), so the text color has to be pinned to black here too —
+     otherwise it just inherits the app's --text color, which is
+     near-white in dark mode and becomes invisible against that white fill.
+     color-scheme:light keeps the picker's icon/dropdown UI light too, so
+     everything about the control matches, in both light and dark mode. */
+  input[type=date],input[type=time]{
+    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;
+    background:#ffffff;color:#000000;color-scheme:light;
+  }
   input:focus,select:focus,textarea:focus,button:focus{outline:2px solid var(--accent);outline-offset:1px;}
   .hidden{display:none !important;}
   a{color:var(--accent);}
@@ -863,7 +874,7 @@
     <h3>Share event</h3>
     <div class="desc">Anyone who opens this link while logged in can add "<span id="share-event-title"></span>" to their own calendar — it becomes their own independent copy, with their own reminder settings.</div>
     <div class="link-row"><input type="text" id="share-event-link" readonly><button onclick="copyShareEventLink()">Copy</button></div>
-    <div class="modal-actions"><button class="danger" id="unshare-event-btn" onclick="stopSharingEvent()">Stop sharing</button><button onclick="closeModal()">Done</button></div>
+    <div class="modal-actions"><button onclick="closeModal()">Done</button></div>
   </div>
 
   <div class="modal hidden" id="modal-add-filter">
